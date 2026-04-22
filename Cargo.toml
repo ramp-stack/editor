@@ -1,0 +1,37 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2021"
+description = "nOrange"
+license = "BSD-3-Clause"
+
+[dependencies]
+image = "0.25.6"
+ramp = { package = "ramp2", path = "../ramp" }
+
+quartz = { path = "../quartz"}
+flowmango = { path = "../flowmango"}
+
+
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.43.0", features = ["rt-multi-thread", "sync", "time", "net"] }
+
+[lib]
+name = "editor"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[package.metadata.android]
+package = "com.orange.pkg"
+build_targets = [ "aarch64-linux-android", "armv7-linux-androideabi" ]
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
+[package.metadata.android.sdk]
+min_sdk_version = 33
+target_sdk_version = 33
+label = "Application Name"
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"

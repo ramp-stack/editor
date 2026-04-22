@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>author</key>
+	<string>Custom Dark Rust</string>
+	<key>name</key>
+	<string>Dark Rust</string>
+	<key>settings</key>
+	<array>
+
+		<dict>
+			<key>settings</key>
+			<dict>
+				<key>background</key>
+				<string>#000000</string>
+				<key>foreground</key>
+				<string>#e1efff</string>
+				<key>caret</key>
+				<string>#ffc600</string>
+				<key>lineHighlight</key>
+				<string>#0d1a26</string>
+				<key>selection</key>
+				<string>#0050a4</string>
+				<key>gutter</key>
+				<string>#000000</string>
+				<key>gutterForeground</key>
+				<string>#3a3a3a</string>
+				<key>invisibles</key>
+				<string>#ffffff18</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Comment</string>
+			<key>scope</key>
+			<string>comment</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#0088ff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>String</string>
+			<key>scope</key>
+			<string>string</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#a5ff90</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Number</string>
+			<key>scope</key>
+			<string>constant.numeric</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#ff628c</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Keyword</string>
+			<key>scope</key>
+			<string>keyword</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#ff9d00</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Control keyword</string>
+			<key>scope</key>
+			<string>keyword.control</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#fb94ff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Storage</string>
+			<key>scope</key>
+			<string>storage</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#ff9d00</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Type</string>
+			<key>scope</key>
+			<string>entity.name.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#80fcff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Support type</string>
+			<key>scope</key>
+			<string>support.type</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#80fcff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Support class</string>
+			<key>scope</key>
+			<string>support.class</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#80fcff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Entity class</string>
+			<key>scope</key>
+			<string>entity.name.class</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#80fcff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Variable language (self)</string>
+			<key>scope</key>
+			<string>variable.language</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#fb94ff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Function name</string>
+			<key>scope</key>
+			<string>entity.name.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#ffc600</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Support function (macros)</string>
+			<key>scope</key>
+			<string>support.function</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#9effff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Lifetime</string>
+			<key>scope</key>
+			<string>storage.modifier.lifetime</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#fb94ff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Attribute / Derive</string>
+			<key>scope</key>
+			<string>meta.annotation, meta.attribute</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#9effff</string>
+			</dict>
+		</dict>
+
+		<dict>
+			<key>name</key>
+			<string>Invalid</string>
+			<key>scope</key>
+			<string>invalid</string>
+			<key>settings</key>
+			<dict>
+				<key>foreground</key>
+				<string>#ffffff</string>
+				<key>background</key>
+				<string>#800f00</string>
+			</dict>
+		</dict>
+
+	</array>
+</dict>
+</plist>
