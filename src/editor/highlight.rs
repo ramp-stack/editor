@@ -200,8 +200,15 @@ pub fn build_text_slice(
     theme: &ThemeColors,
     lang: &Lang,
 ) -> Text {
-    
-    }
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .expect("Error loading Rust grammar");
+    let source_code = "fn test() {}";
+    let mut tree = parser.parse(source_code, None).unwrap();
+    let root_node = tree.root_node();
+    let mut spans: Vec<Span> = Vec::new();
+
     Text::new(spans, None, Align::Left, None)
 }
 
