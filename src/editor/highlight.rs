@@ -207,7 +207,7 @@ pub fn build_text_slice(
     /* Turns all the text of a Rust file into one giant String, which is what tree-sitter's parse()
     expects. */
     let source_code = lines.join("\n");
-    let mut tree = parser.parse(source_code, None).unwrap();
+    let mut tree = parser.parse(&source_code, None).unwrap();
     let mut tree_cursor = tree.walk();
     let mut spans: Vec<Span> = Vec::new();
 
@@ -218,6 +218,12 @@ pub fn build_text_slice(
         } else {
             // process leaf here. Find current node first.
             let current_node = tree_cursor.node();
+            // find the beg and end of the lead in the byte range.
+            let start_byte = current_node.start_byte();
+            let end_byte = current_node.end_byte();
+            let token_text = &source_code[start_byte..end_byte];
+            println!("Current node's kind: {}", current_node.kind());
+            println!("Token text: {}", token_text);
             loop {
                 if tree_cursor.goto_next_sibling() {
                     break;
