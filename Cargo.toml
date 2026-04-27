@@ -11,6 +11,8 @@ ramp = { package = "ramp2", path = "../ramp" }
 
 quartz = { path = "../quartz"}
 flowmango = { path = "../flowmango"}
+tree-sitter = "0.26.8"
+tree-sitter-rust = "0.24.2"
 
 
 
