@@ -204,10 +204,30 @@ pub fn build_text_slice(
     parser
         .set_language(&tree_sitter_rust::LANGUAGE.into())
         .expect("Error loading Rust grammar");
-    let source_code = "fn test() {}";
+    /* Turns all the text of a Rust file into one giant String, which is what tree-sitter's parse()
+    expects. */
+    let source_code = lines.join("\n");
     let mut tree = parser.parse(source_code, None).unwrap();
-    let root_node = tree.root_node();
+    let mut tree_cursor = tree.walk();
     let mut spans: Vec<Span> = Vec::new();
+
+    /* The goal of this loop is to traverse every node in the Tree, determine if it is a leaf,
+    and if so, copy it's data into `spans`. */
+    'outer: loop {
+        if tree_cursor.goto_first_child() {
+        } else {
+            // process leaf here. Find current node first.
+            let current_node = tree_cursor.node();
+            loop {
+                if tree_cursor.goto_next_sibling() {
+                    break;
+                }
+                if !tree_cursor.goto_parent() {
+                    break 'outer;
+                }
+            }
+        }
+    }
 
     Text::new(spans, None, Align::Left, None)
 }
