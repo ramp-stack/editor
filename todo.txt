@@ -1,0 +1,15 @@
+The ones you're missing:                         
+                                                   
+  - string — "string_literal", "raw_string_literal"
+  - number — "integer_literal", "float_literal"
+  - comment — "line_comment", "block_comment"      
+  - ty — "type_identifier", "primitive_type"
+  - macro_col — "identifier" when it's a function  
+  name (tricky — may need runtime output to verify)
+  - lifetime — "lifetime"
+                                                   
+  When you come back, the next step is adding those
+   arms and then wiring token_color into the
+  traversal loop so it actually gets called on each
+   leaf node. Good stopping point.
+

@@ -161,26 +161,6 @@ pub fn load_tm_theme(bytes: &[u8]) -> ThemeColors {
 
 // ── Syntax helpers ────────────────────────────────────────────────────────────
 
-//TODO: replace.
-pub fn token_color(word: &str, next_char: Option<char>, theme: &ThemeColors) -> Color {
-    if next_char == Some('!') {
-        return theme.macro_col;
-    }
-    if word == "self" || word == "Self" {
-        return theme.ty;
-    }
-    if CTRL.contains(&word) {
-        return theme.control;
-    }
-    if KW.contains(&word) {
-        return theme.keyword;
-    }
-    if word.starts_with(|c: char| c.is_uppercase()) {
-        return theme.ty;
-    }
-    theme.default
-}
-
 pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
     let mut iter = s.char_indices();
     let start = iter.nth(ca).map(|(b, _)| b).unwrap_or(s.len());
@@ -190,6 +170,19 @@ pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
         start
     };
     (start, end)
+}
+
+pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
+    match node_kind {
+        "use" | "fn" | "let" | "mut" | "pub" | "mod" | "struct" | "enum" | "impl" | "trait"
+        | "type" | "const" | "static" | "extern" | "crate" | "super" | "where" | "as" | "in"
+        | "ref" | "dyn" | "unsafe" | "async" | "await" | "move" | "true" | "false" => theme.keyword,
+        "::" => theme.default,
+        "if" | "else" | "for" | "while" | "match" | "loop" | "return" | "break" | "continue" => {
+            theme.control
+        }
+        _ => theme.default,
+    }
 }
 
 //TODO: refactor this function.
@@ -218,7 +211,7 @@ pub fn build_text_slice(
         } else {
             // process leaf here. Find current node first.
             let current_node = tree_cursor.node();
-            // find the beg and end of the lead in the byte range.
+            // find the beg and end of the node in the byte range.
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
@@ -276,4 +269,3 @@ pub fn build_gutter_slice(
     }
     Text::new(spans, None, Align::Right, None)
 }
-
