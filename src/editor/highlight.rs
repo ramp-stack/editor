@@ -208,18 +208,28 @@ pub fn build_text_slice(
     let mut tree = parser.parse(&source_code, None).unwrap();
     let mut tree_cursor = tree.walk();
     let mut spans: Vec<Span> = Vec::new();
+    let mut prev_end: usize = 0;
 
     /* The goal of this loop is to traverse every node in the Tree, determine if it is a leaf,
     and if so, copy it's data into `spans`. */
     'outer: loop {
         if tree_cursor.goto_first_child() {
         } else {
-            // process leaf here. Find current node first.
+            // Bingo, we're at a leaf. process leaf here. Find current node first.
             let current_node = tree_cursor.node();
             // find the beg and end of the node in the byte range.
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
+
+            spans.push(Span::new(
+                source_code[prev_end..start_byte].to_string(),
+                cfg.font_size,
+                Some(cfg.line_height()),
+                font.clone(),
+                theme.default,
+                0.0,
+            ));
             spans.push(Span::new(
                 token_text.to_string(),
                 cfg.font_size,
@@ -228,6 +238,8 @@ pub fn build_text_slice(
                 token_color(current_node.kind(), theme),
                 0.0,
             ));
+
+            prev_end = end_byte;
             loop {
                 if tree_cursor.goto_next_sibling() {
                     break;
