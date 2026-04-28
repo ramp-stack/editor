@@ -181,6 +181,11 @@ pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
         "if" | "else" | "for" | "while" | "match" | "loop" | "return" | "break" | "continue" => {
             theme.control
         }
+        "string_literal" | "raw_string_literal" => theme.string,
+        "integer_literal" | "float_literal" => theme.number,
+        "line_comment" | "block_comment" => theme.comment,
+        "type_identifier" | "primitive_type" => theme.ty,
+        "lifetime" => theme.lifetime,
         _ => theme.default,
     }
 }
@@ -215,8 +220,14 @@ pub fn build_text_slice(
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
-            println!("Current node's kind: {}", current_node.kind());
-            println!("Token text: {}", token_text);
+            spans.push(Span::new(
+                token_text.to_string(),
+                cfg.font_size,
+                Some(cfg.line_height()),
+                font.clone(),
+                token_color(current_node.kind(), theme),
+                0.0,
+            ));
             loop {
                 if tree_cursor.goto_next_sibling() {
                     break;
