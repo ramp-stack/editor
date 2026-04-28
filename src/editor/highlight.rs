@@ -181,7 +181,7 @@ pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
         "if" | "else" | "for" | "while" | "match" | "loop" | "return" | "break" | "continue" => {
             theme.control
         }
-        "string_literal" | "raw_string_literal" => theme.string,
+        "string_literal" | "raw_string_literal" | "string_content" => theme.string,
         "integer_literal" | "float_literal" => theme.number,
         "line_comment" | "block_comment" => theme.comment,
         "type_identifier" | "primitive_type" => theme.ty,
@@ -218,6 +218,7 @@ pub fn build_text_slice(
             // Bingo, we're at a leaf. process leaf here. Find current node first.
             let current_node = tree_cursor.node();
             // find the beg and end of the node in the byte range.
+            println!("{}", current_node.kind());
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
