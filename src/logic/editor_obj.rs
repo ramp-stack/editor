@@ -60,7 +60,6 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 names_u.gutter_bg.as_str(), names_u.gutter.as_str(),
                 names_u.code_text.as_str(), names_u.cursor.as_str(),
             ]);
-            // Hide all selection overlays in image mode
             for i in 0..SEL_OVERLAY_COUNT {
                 let name = sel_overlay_name(&id_prefix_u, i);
                 if let Some(o) = cv.get_game_object_mut(&name) { o.visible = false; }
@@ -73,6 +72,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             names_u.code_text.as_str(), names_u.cursor.as_str(),
         ]);
 
+        // ── Autosave ──────────────────────────────────────────────────────────
         {
             let timer = { *autosave_timer.get() };
             *autosave_timer.get_mut() = timer + 1.0 / 60.0;
@@ -89,6 +89,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         };
         if total == 0 { return; }
 
+        // ── Max line width ────────────────────────────────────────────────────
         {
             let cur_max = { *max_line_width_u.get() };
             if cur_max <= 0.0 {
@@ -100,6 +101,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Scroll intent (keyboard/drag-edge sustained drive) ────────────────
         {
             let intent = { *scroll_intent.get() };
             if intent != 0.0 {
@@ -107,18 +109,24 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Vertical scroll physics ───────────────────────────────────────────
         {
             let vel = { *scroll_vel_u.get() };
             if vel.abs() > 0.1 {
-                let v_max = ((total as f32 - 1.0) * lh).max(0.0);
+                // v_max: last line sits at top of viewport, not past the bottom
+                let viewport_h = (eh - cfg.text_y).max(0.0);
+                let v_max = ((total as f32) * lh - viewport_h).max(0.0);
                 let cur   = { *scroll_u.get() };
                 let next  = (cur + vel).clamp(0.0, v_max);
                 let new_vel = if next <= 0.0 || next >= v_max { 0.0 } else { vel * cfg.scroll_friction };
                 *scroll_u.get_mut()     = next;
                 *scroll_vel_u.get_mut() = new_vel;
-            } else { *scroll_vel_u.get_mut() = 0.0; }
+            } else {
+                *scroll_vel_u.get_mut() = 0.0;
+            }
         }
 
+        // ── Horizontal scroll physics ─────────────────────────────────────────
         {
             let h_max = ({ *max_line_width_u.get() } - code_w).max(0.0);
             let h_vel = { *h_scroll_vel_u.get() };
@@ -138,6 +146,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         }
 
         let gs              = { *scroll_u.get() };
+        let hs              = { *h_scroll_u.get() };
         let first_visible   = (gs / lh).floor() as usize;
         let sub_line_offset = gs - first_visible as f32 * lh;
         let (slice_start, text_top) = if first_visible > 0 {
@@ -150,8 +159,8 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             ((eh - cfg.text_y) / lh).ceil() as usize + 2
         } else { 2 };
         let last_visible = (slice_start + visible_lines).min(total);
-        let hs = { *h_scroll_u.get() };
-        
+
+        // ── Drag-select tick ──────────────────────────────────────────────────
         {
             if *dragging_u.get() {
                 if let Some((mx, my)) = cv.mouse_position() {
@@ -161,14 +170,12 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                     if !st.lines.is_empty() {
                         let row = {
                             let row_float = ((my_c - ey - cfg.text_y + gs) / lh)
-                                .floor()
-                                .max(0.0) as usize;
+                                .floor().max(0.0) as usize;
                             row_float.min(st.lines.len().saturating_sub(1))
                         };
                         let col = {
                             (((mx_c - ex - cfg.text_x + hs) / cw)
-                                .floor()
-                                .max(0.0) as usize)
+                                .floor().max(0.0) as usize)
                                 .min(st.lines[row].len())
                         };
                         st.cursor_row = row;
@@ -179,6 +186,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Text + gutter slices ──────────────────────────────────────────────
         {
             let st = state_u.lock().unwrap();
             if last_visible > slice_start {
@@ -190,8 +198,8 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 if text_w > cur_max { *max_line_width_u.get_mut() = text_w; }
                 if let Some(o) = cv.get_game_object_mut(&names_u.code_text) {
                     o.position.0 = code_x - hs; o.position.1 = text_top;
-                    o.set_clip_origin(Some((ex + cfg.text_x, ey)));
-                    o.set_clip_size(Some((code_w + hs, eh)));
+                    o.set_clip_origin(Some((ex, ey)));
+                    o.set_clip_size(Some((ew, eh)));
                     o.set_drawable(Box::new(text));
                 }
                 if let Some(o) = cv.get_game_object_mut(&names_u.gutter) {
@@ -205,8 +213,8 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
 
         if let Some(o) = cv.get_game_object_mut(&names_u.code_text) {
             o.position.0 = code_x - hs;
-            o.set_clip_origin(Some((ex + cfg.text_x, ey)));
-            o.set_clip_size(Some((code_w + hs, eh)));
+            o.set_clip_origin(Some((ex, ey)));
+            o.set_clip_size(Some((ew, eh)));
         }
         if let Some(o) = cv.get_game_object_mut(&names_u.bg) {
             o.position = (ex, ey); o.size = (ew, eh);
@@ -217,6 +225,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             o.set_image(tint_overlay(4000.0, 4000.0, theme.gutter_bg));
         }
 
+        // ── Selection overlays ────────────────────────────────────────────────
         {
             let st = state_u.lock().unwrap();
             let sel = st.selection();
@@ -224,32 +233,23 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             for i in 0..SEL_OVERLAY_COUNT {
                 let abs_row = slice_start + i;
                 let name    = sel_overlay_name(&id_prefix_u, i);
-
                 let Some(o) = cv.get_game_object_mut(&name) else { continue };
 
                 let Some(((r1, c1), (r2, c2))) = sel else {
-                    o.visible = false;
-                    continue;
+                    o.visible = false; continue;
                 };
                 if abs_row >= total || abs_row < r1 || abs_row > r2 {
-                    o.visible = false;
-                    continue;
+                    o.visible = false; continue;
                 }
 
-                let line = &st.lines[abs_row];
+                let line      = &st.lines[abs_row];
                 let start_col = if abs_row == r1 { c1.min(line.len()) } else { 0 };
                 let end_col   = if abs_row == r2 { c2.min(line.len()) } else { line.len() };
 
-                let x_start = (code_x + start_col as f32 * cw - hs)
-                    .max(code_x)
-                    .min(ex + ew);
-                let x_end   = (code_x + end_col as f32 * cw - hs)
-                    .max(code_x)
-                    .min(ex + ew);
+                let x_start = (code_x + start_col as f32 * cw - hs).max(code_x).min(ex + ew);
+                let x_end   = (code_x + end_col   as f32 * cw - hs).max(code_x).min(ex + ew);
                 let row_y   = text_top + (abs_row as f32 - slice_start as f32) * lh;
-
-                let sel_w = (x_end - x_start).max(cw * 0.5);
-
+                let sel_w   = (x_end - x_start).max(cw * 0.5);
                 let need_resize = (o.size.0 - sel_w).abs() > 0.5;
 
                 o.position = (x_start, row_y);
@@ -265,6 +265,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Cursor ────────────────────────────────────────────────────────────
         let cursor_x = code_x + cur_col as f32 * cw - hs;
         let cursor_y = text_top + (cur_row as f32 - slice_start as f32) * lh;
         let in_view  = cursor_x >= code_x && cursor_x < ex + ew - RIGHT_PAD
