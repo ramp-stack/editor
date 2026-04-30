@@ -221,10 +221,8 @@ pub fn build_text_slice(
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
-            println!("Kind: {} Token Text: {}", current_node.kind(), &token_text);
 
             if current_node.kind() == "//" {
-                println!("parent kind: {:?}", current_node.parent().map(|p| p.kind()));
                 spans.push(Span::new(
                     source_code[prev_end..current_node.parent().unwrap().start_byte()].to_string(),
                     cfg.font_size,
