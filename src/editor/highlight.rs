@@ -221,29 +221,48 @@ pub fn build_text_slice(
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
             let token_text = &source_code[start_byte..end_byte];
-            println!("Kind: {} Token Text: {}", current_node.kind(), &token_text);
 
             if current_node.kind() == "//" {
-                println!("parent kind: {:?}", current_node.parent().map(|p| p.kind()));
-            }
-            spans.push(Span::new(
-                source_code[prev_end..start_byte].to_string(),
-                cfg.font_size,
-                Some(cfg.line_height()),
-                font.clone(),
-                theme.default,
-                0.0,
-            ));
-            spans.push(Span::new(
-                token_text.to_string(),
-                cfg.font_size,
-                Some(cfg.line_height()),
-                font.clone(),
-                token_color(current_node.kind(), theme),
-                0.0,
-            ));
+                spans.push(Span::new(
+                    source_code[prev_end..current_node.parent().unwrap().start_byte()].to_string(),
+                    cfg.font_size,
+                    Some(cfg.line_height()),
+                    font.clone(),
+                    theme.default,
+                    0.0,
+                ));
+                spans.push(Span::new(
+                    source_code[current_node.parent().unwrap().start_byte()
+                        ..current_node.parent().unwrap().end_byte()]
+                        .to_string(),
+                    cfg.font_size,
+                    Some(cfg.line_height()),
+                    font.clone(),
+                    theme.comment,
+                    0.0,
+                ));
 
-            prev_end = end_byte;
+                prev_end = current_node.parent().unwrap().end_byte();
+            } else {
+                spans.push(Span::new(
+                    source_code[prev_end..start_byte].to_string(),
+                    cfg.font_size,
+                    Some(cfg.line_height()),
+                    font.clone(),
+                    theme.default,
+                    0.0,
+                ));
+                spans.push(Span::new(
+                    token_text.to_string(),
+                    cfg.font_size,
+                    Some(cfg.line_height()),
+                    font.clone(),
+                    token_color(current_node.kind(), theme),
+                    0.0,
+                ));
+                prev_end = end_byte;
+            }
+
             loop {
                 if tree_cursor.goto_next_sibling() {
                     break;
