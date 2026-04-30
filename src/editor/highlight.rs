@@ -226,6 +226,14 @@ pub fn build_text_slice(
             if current_node.kind() == "//" {
                 println!("parent kind: {:?}", current_node.parent().map(|p| p.kind()));
                 spans.push(Span::new(
+                    source_code[prev_end..current_node.parent().unwrap().start_byte()].to_string(),
+                    cfg.font_size,
+                    Some(cfg.line_height()),
+                    font.clone(),
+                    theme.default,
+                    0.0,
+                ));
+                spans.push(Span::new(
                     source_code[current_node.parent().unwrap().start_byte()
                         ..current_node.parent().unwrap().end_byte()]
                         .to_string(),
@@ -254,9 +262,9 @@ pub fn build_text_slice(
                     token_color(current_node.kind(), theme),
                     0.0,
                 ));
+                prev_end = end_byte;
             }
 
-            prev_end = end_byte;
             loop {
                 if tree_cursor.goto_next_sibling() {
                     break;
