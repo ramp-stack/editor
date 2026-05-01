@@ -26,7 +26,6 @@ pub struct ThemeColors {
     pub editor_bg: Color,
 }
 
-//keep
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
     match s.len() {
@@ -46,7 +45,6 @@ fn parse_hex_color(s: &str) -> Option<Color> {
     }
 }
 
-//keep
 fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     let needle = format!("<key>{name}</key>");
     let pos = text.find(needle.as_str())?;
@@ -56,7 +54,6 @@ fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     Some(after[start..start + end].trim())
 }
 
-//keep
 pub fn load_tm_theme(bytes: &[u8]) -> ThemeColors {
     let zero = Color(0, 0, 0, 255);
     let mut t = ThemeColors {
@@ -190,7 +187,6 @@ pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
     }
 }
 
-//TODO: refactor this function.
 pub fn build_text_slice(
     lines: &[String],
     font: &Arc<Font>,
@@ -220,9 +216,10 @@ pub fn build_text_slice(
             // find the beg and end of the node in the byte range.
             let start_byte = current_node.start_byte();
             let end_byte = current_node.end_byte();
-            let token_text = &source_code[start_byte..end_byte];
 
-            if current_node.kind() == "//" {
+            if matches!(current_node.kind(), "//" | "/*") {
+                /* First span captures whitespace. Notice that we jump up to parent to handle special
+                comment situation. */
                 spans.push(Span::new(
                     source_code[prev_end..current_node.parent().unwrap().start_byte()].to_string(),
                     cfg.font_size,
@@ -231,6 +228,7 @@ pub fn build_text_slice(
                     theme.default,
                     0.0,
                 ));
+                //Second span captures byte space of parent (token text) and colors it correctly.
                 spans.push(Span::new(
                     source_code[current_node.parent().unwrap().start_byte()
                         ..current_node.parent().unwrap().end_byte()]
@@ -243,7 +241,12 @@ pub fn build_text_slice(
                 ));
 
                 prev_end = current_node.parent().unwrap().end_byte();
+                // We're setting tree_cursor to parent of "/*" (which is block_comment) to skip "*/".
+                if current_node.kind() == "/*" {
+                    tree_cursor.goto_parent();
+                }
             } else {
+                let token_text = &source_code[start_byte..end_byte];
                 spans.push(Span::new(
                     source_code[prev_end..start_byte].to_string(),
                     cfg.font_size,
