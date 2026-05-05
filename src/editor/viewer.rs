@@ -51,7 +51,7 @@ pub fn mount_image_obj(
     } else {
         let mut o = GameObject::build(&name)
             .position(x, y).size(w, h).layer(layer)
-            .image(quartz::tint_overlay(1.0, 1.0, quartz::Color(0, 0, 0, 0)))
+            .image(quartz::tint_overlay(1.0, 1.0, quartz::Color(0u8, 0u8, 0u8, 0u8)))
             .finish();
         o.visible = false;
         o
