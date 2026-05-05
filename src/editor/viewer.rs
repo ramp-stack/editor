@@ -43,7 +43,8 @@ pub fn mount_image_obj(
 ) {
     let name = img_obj_name(id_prefix);
     let obj = if *mode == FileMode::Image {
-        let img = quartz::load_image_sized(path, w, h);
+        let bytes = std::fs::read(path).unwrap_or_default();
+        let img = quartz::load_image_sized(&bytes, w, h);
         GameObject::build(&name)
             .position(x, y).size(w, h).layer(layer)
             .image(img).finish()
@@ -73,7 +74,8 @@ pub fn update_image_obj(
         }
         return;
     }
-    let img = quartz::load_image_sized(path, w, h);
+    let bytes = std::fs::read(path).unwrap_or_default();
+    let img = quartz::load_image_sized(&bytes, w, h);
     *loaded_key.get_mut() = key;
     if let Some(o) = cv.get_game_object_mut(&img_obj_name(id_prefix)) {
         o.position = (x, y);
