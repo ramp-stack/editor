@@ -7,7 +7,6 @@ use tree_sitter::{InputEdit, Language, Parser, Point};
 
 // ── ThemeColors ───────────────────────────────────────────────────────────────
 
-//keep ThemeColors
 #[derive(Clone)]
 pub struct ThemeColors {
     pub default: Color,
@@ -26,6 +25,7 @@ pub struct ThemeColors {
     pub editor_bg: Color,
 }
 
+// A hex color string like "#ff9d00" gets passed in here.
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
     match s.len() {
@@ -170,7 +170,7 @@ pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
 }
 
 pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
-    match node_kind {
+    let color = match node_kind {
         "use" | "fn" | "let" | "mut" | "pub" | "mod" | "struct" | "enum" | "impl" | "trait"
         | "type" | "const" | "static" | "extern" | "crate" | "super" | "where" | "as" | "in"
         | "ref" | "dyn" | "unsafe" | "async" | "await" | "move" | "true" | "false" => theme.keyword,
@@ -184,7 +184,9 @@ pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
         "type_identifier" | "primitive_type" => theme.ty,
         "lifetime" => theme.lifetime,
         _ => theme.default,
-    }
+    };
+    println!("Node kind {}. Color {:?}", node_kind, color);
+    color
 }
 
 pub fn build_text_slice(
@@ -201,7 +203,7 @@ pub fn build_text_slice(
     /* Turns all the text of a Rust file into one giant String, which is what tree-sitter's parse()
     expects. */
     let source_code = lines.join("\n");
-    let mut tree = parser.parse(&source_code, None).unwrap();
+    let tree = parser.parse(&source_code, None).unwrap();
     let mut tree_cursor = tree.walk();
     let mut spans: Vec<Span> = Vec::new();
     let mut prev_end: usize = 0;
