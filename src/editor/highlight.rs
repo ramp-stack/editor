@@ -2,6 +2,8 @@ use crate::constants::{CTRL, KW};
 use crate::editor::viewer::Lang;
 use crate::preferences::Settings;
 use quartz::{Align, Color, Font, Span, Text};
+use serde_json::from_slice;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tree_sitter::{InputEdit, Language, Parser, Point};
 
@@ -52,6 +54,21 @@ fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     let start = after.find("<string>")? + "<string>".len();
     let end = after[start..].find("</string>")?;
     Some(after[start..start + end].trim())
+}
+
+pub fn load_json_theme(bytes: &[u8]) -> HashMap<String, Color> {
+    let value: serde_json::Value = from_slice(bytes).expect("Failed to read JSON theme file.");
+    let mut hashmap_from_json = HashMap::new();
+    if let Some(map) = value["syntax"].as_object() {
+        for (key, val) in map {
+            hashmap_from_json.insert(
+                key.to_string(),
+                parse_hex_color(val.as_str().expect("Theme value is not a string."))
+                    .expect("Failed to parse_hex_color"),
+            );
+        }
+    }
+    hashmap_from_json
 }
 
 pub fn load_tm_theme(bytes: &[u8]) -> ThemeColors {
