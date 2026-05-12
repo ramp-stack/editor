@@ -59,7 +59,18 @@ fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
 pub fn load_json_theme(bytes: &[u8]) -> HashMap<String, Color> {
     let value: serde_json::Value = from_slice(bytes).expect("Failed to read JSON theme file.");
     let mut hashmap_from_json = HashMap::new();
+    //Load the syntax object from JSON.
     if let Some(map) = value["syntax"].as_object() {
+        for (key, val) in map {
+            hashmap_from_json.insert(
+                key.to_string(),
+                parse_hex_color(val.as_str().expect("Theme value is not a string."))
+                    .expect("Failed to parse_hex_color"),
+            );
+        }
+    }
+    //Load the UI object from JSON.
+    if let Some(map) = value["ui"].as_object() {
         for (key, val) in map {
             hashmap_from_json.insert(
                 key.to_string(),
@@ -284,6 +295,7 @@ pub fn build_text_slice(
                     theme
                         .get(current_node.kind())
                         .copied()
+                        //default acts a fallback.
                         .unwrap_or(theme.get("default").copied().unwrap()),
                     0.0,
                 ));
@@ -310,7 +322,7 @@ pub fn build_gutter_slice(
     cursor_row: usize,
     font: &Arc<Font>,
     cfg: &Settings,
-    theme: &ThemeColors,
+    theme: &HashMap<String, Color>,
 ) -> Text {
     let fs = cfg.font_size;
     let lh = cfg.line_height();
@@ -322,14 +334,14 @@ pub fn build_gutter_slice(
                 fs,
                 Some(lh),
                 font.clone(),
-                theme.lineno,
+                theme.get("lineno").copied().unwrap(),
                 0.0,
             ));
         }
         let color = if abs_line == cursor_row {
-            theme.lineno_a
+            theme.get("lineno_a").copied().unwrap()
         } else {
-            theme.lineno
+            theme.get("lineno").copied().unwrap()
         };
         spans.push(Span::new(
             format!("{:>4}", abs_line + 1),
