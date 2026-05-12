@@ -210,7 +210,7 @@ pub fn build_text_slice(
     lines: &[String],
     font: &Arc<Font>,
     cfg: &Settings,
-    theme: &ThemeColors,
+    theme: &HashMap<String, Color>,
     lang: &Lang,
 ) -> Text {
     let mut parser = Parser::new();
@@ -244,7 +244,7 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.default,
+                    theme.get("default").copied().unwrap(),
                     0.0,
                 ));
                 //Second span captures byte space of parent (token text) and colors it correctly.
@@ -255,7 +255,9 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.comment,
+                    //line_comment is the same color as block_comment. Not very principled,
+                    //but the JSON doesn't allow for something more elegant yet.
+                    theme.get("line_comment").copied().unwrap(),
                     0.0,
                 ));
 
@@ -271,7 +273,7 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.default,
+                    theme.get("default").copied().unwrap(),
                     0.0,
                 ));
                 spans.push(Span::new(
@@ -279,7 +281,10 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    token_color(current_node.kind(), theme),
+                    theme
+                        .get(current_node.kind())
+                        .copied()
+                        .unwrap_or(theme.get("default").copied().unwrap()),
                     0.0,
                 ));
                 prev_end = end_byte;
