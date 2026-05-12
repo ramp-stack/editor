@@ -7,26 +7,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tree_sitter::{InputEdit, Language, Parser, Point};
 
-// ── ThemeColors ───────────────────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub struct ThemeColors {
-    pub default: Color,
-    pub keyword: Color,
-    pub control: Color,
-    pub ty: Color,
-    pub string: Color,
-    pub number: Color,
-    pub comment: Color,
-    pub macro_col: Color,
-    pub lifetime: Color,
-    pub lineno: Color,
-    pub lineno_a: Color,
-    pub hud: Color,
-    pub gutter_bg: Color,
-    pub editor_bg: Color,
-}
-
 // A hex color string like "#ff9d00" gets passed in here.
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
@@ -45,15 +25,6 @@ fn parse_hex_color(s: &str) -> Option<Color> {
         )),
         _ => None,
     }
-}
-
-fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
-    let needle = format!("<key>{name}</key>");
-    let pos = text.find(needle.as_str())?;
-    let after = &text[pos + needle.len()..];
-    let start = after.find("<string>")? + "<string>".len();
-    let end = after[start..].find("</string>")?;
-    Some(after[start..start + end].trim())
 }
 
 pub fn load_json_theme(bytes: &[u8]) -> HashMap<String, Color> {
@@ -82,108 +53,6 @@ pub fn load_json_theme(bytes: &[u8]) -> HashMap<String, Color> {
     hashmap_from_json
 }
 
-pub fn load_tm_theme(bytes: &[u8]) -> ThemeColors {
-    let zero = Color(0, 0, 0, 255);
-    let mut t = ThemeColors {
-        default: zero,
-        keyword: zero,
-        control: zero,
-        ty: zero,
-        string: zero,
-        number: zero,
-        comment: zero,
-        macro_col: zero,
-        lifetime: zero,
-        lineno: Color(80, 80, 80, 255),
-        lineno_a: Color(180, 180, 180, 255),
-        hud: Color(180, 180, 100, 255),
-        gutter_bg: zero,
-        editor_bg: zero,
-    };
-    let text = match std::str::from_utf8(bytes) {
-        Ok(t) => t,
-        Err(_) => return t,
-    };
-    let mut remaining = text;
-
-    while let Some(dict_start) = remaining.find("<dict>") {
-        let block_from = &remaining[dict_start..];
-        let dict_end = match block_from.find("</dict>") {
-            Some(e) => e + "</dict>".len(),
-            None => break,
-        };
-        let block = &block_from[..dict_end];
-        remaining = &block_from[dict_end..];
-        let scope = extract_string_after_key(block, "scope");
-        let fg = extract_string_after_key(block, "foreground");
-        let bg = extract_string_after_key(block, "background");
-
-        if scope.is_none() {
-            if let Some(c) = bg.and_then(parse_hex_color) {
-                t.editor_bg = c;
-            }
-            if let Some(c) = fg.and_then(parse_hex_color) {
-                t.default = c;
-            }
-            if let Some(c) = extract_string_after_key(block, "gutter").and_then(parse_hex_color) {
-                t.gutter_bg = c;
-            } else {
-                t.gutter_bg = Color(
-                    t.editor_bg.0.saturating_sub(15),
-                    t.editor_bg.1.saturating_sub(15),
-                    t.editor_bg.2.saturating_sub(15),
-                    255,
-                );
-            }
-            if let Some(c) =
-                extract_string_after_key(block, "gutterForeground").and_then(parse_hex_color)
-            {
-                t.lineno = c;
-                t.lineno_a = Color(
-                    (c.0 as u16 + 80).min(255) as u8,
-                    (c.1 as u16 + 80).min(255) as u8,
-                    (c.2 as u16 + 80).min(255) as u8,
-                    255,
-                );
-            }
-            continue;
-        }
-
-        let color = match fg.and_then(parse_hex_color) {
-            Some(c) => c,
-            None => continue,
-        };
-        for part in scope.unwrap().split(',') {
-            let part = part.trim();
-            if part.starts_with("comment") {
-                t.comment = Color(color.0, color.1, color.2, 140);
-            } else if part.starts_with("string") {
-                t.string = color;
-            } else if part.starts_with("constant.numeric") || part == "constant.other.color" {
-                t.number = color;
-            } else if part.starts_with("keyword.control") {
-                t.control = color;
-            } else if part.starts_with("keyword") || part.starts_with("storage") {
-                t.keyword = color;
-            } else if part.starts_with("entity.name.type")
-                || part.starts_with("support.type")
-                || part.starts_with("support.class")
-                || part.starts_with("entity.name.class")
-                || part.starts_with("variable.language")
-            {
-                t.ty = color;
-            } else if part.starts_with("entity.name.function")
-                || part.starts_with("support.function")
-            {
-                t.macro_col = color;
-            } else if part.starts_with("storage.modifier.lifetime") {
-                t.lifetime = color;
-            }
-        }
-    }
-    t
-}
-
 // ── Syntax helpers ────────────────────────────────────────────────────────────
 
 pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
@@ -195,26 +64,6 @@ pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
         start
     };
     (start, end)
-}
-
-pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
-    let color = match node_kind {
-        "use" | "fn" | "let" | "mut" | "pub" | "mod" | "struct" | "enum" | "impl" | "trait"
-        | "type" | "const" | "static" | "extern" | "crate" | "super" | "where" | "as" | "in"
-        | "ref" | "dyn" | "unsafe" | "async" | "await" | "move" | "true" | "false" => theme.keyword,
-        "::" => theme.default,
-        "if" | "else" | "for" | "while" | "match" | "loop" | "return" | "break" | "continue" => {
-            theme.control
-        }
-        "string_literal" | "raw_string_literal" | "string_content" => theme.string,
-        "integer_literal" | "float_literal" => theme.number,
-        "line_comment" | "block_comment" => theme.comment,
-        "type_identifier" | "primitive_type" => theme.ty,
-        "lifetime" => theme.lifetime,
-        _ => theme.default,
-    };
-    println!("Node kind {}. Color {:?}", node_kind, color);
-    color
 }
 
 pub fn build_text_slice(

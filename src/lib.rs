@@ -1,16 +1,15 @@
 pub mod constants;
-pub mod preferences;
 pub mod editor;
-pub mod objects;
 pub mod logic;
+pub mod objects;
+pub mod preferences;
 
 pub use editor::Editor;
-pub use editor::highlight::ThemeColors;
 
 pub mod prelude {
     pub use crate::editor::Editor;
-    pub use crate::preferences::Settings;
     pub use crate::preferences::CursorStyle;
+    pub use crate::preferences::Settings;
 }
 
 impl Editor {
@@ -23,3 +22,4 @@ impl Editor {
         logic::editor_obj::register(cv, self);
     }
 }
+
