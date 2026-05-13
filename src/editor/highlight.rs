@@ -2,30 +2,12 @@ use crate::constants::{CTRL, KW};
 use crate::editor::viewer::Lang;
 use crate::preferences::Settings;
 use quartz::{Align, Color, Font, Span, Text};
+use serde_json::from_slice;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tree_sitter::{InputEdit, Language, Parser, Point};
 
-// ── ThemeColors ───────────────────────────────────────────────────────────────
-
-//keep ThemeColors
-#[derive(Clone)]
-pub struct ThemeColors {
-    pub default: Color,
-    pub keyword: Color,
-    pub control: Color,
-    pub ty: Color,
-    pub string: Color,
-    pub number: Color,
-    pub comment: Color,
-    pub macro_col: Color,
-    pub lifetime: Color,
-    pub lineno: Color,
-    pub lineno_a: Color,
-    pub hud: Color,
-    pub gutter_bg: Color,
-    pub editor_bg: Color,
-}
-
+// A hex color string like "#ff9d00" gets passed in here.
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
     match s.len() {
@@ -45,115 +27,30 @@ fn parse_hex_color(s: &str) -> Option<Color> {
     }
 }
 
-fn extract_string_after_key<'a>(text: &'a str, name: &str) -> Option<&'a str> {
-    let needle = format!("<key>{name}</key>");
-    let pos = text.find(needle.as_str())?;
-    let after = &text[pos + needle.len()..];
-    let start = after.find("<string>")? + "<string>".len();
-    let end = after[start..].find("</string>")?;
-    Some(after[start..start + end].trim())
-}
-
-pub fn load_tm_theme(bytes: &[u8]) -> ThemeColors {
-    let zero = Color(0, 0, 0, 255);
-    let mut t = ThemeColors {
-        default: zero,
-        keyword: zero,
-        control: zero,
-        ty: zero,
-        string: zero,
-        number: zero,
-        comment: zero,
-        macro_col: zero,
-        lifetime: zero,
-        lineno: Color(80, 80, 80, 255),
-        lineno_a: Color(180, 180, 180, 255),
-        hud: Color(180, 180, 100, 255),
-        gutter_bg: zero,
-        editor_bg: zero,
-    };
-    let text = match std::str::from_utf8(bytes) {
-        Ok(t) => t,
-        Err(_) => return t,
-    };
-    let mut remaining = text;
-
-    while let Some(dict_start) = remaining.find("<dict>") {
-        let block_from = &remaining[dict_start..];
-        let dict_end = match block_from.find("</dict>") {
-            Some(e) => e + "</dict>".len(),
-            None => break,
-        };
-        let block = &block_from[..dict_end];
-        remaining = &block_from[dict_end..];
-        let scope = extract_string_after_key(block, "scope");
-        let fg = extract_string_after_key(block, "foreground");
-        let bg = extract_string_after_key(block, "background");
-
-        if scope.is_none() {
-            if let Some(c) = bg.and_then(parse_hex_color) {
-                t.editor_bg = c;
-            }
-            if let Some(c) = fg.and_then(parse_hex_color) {
-                t.default = c;
-            }
-            if let Some(c) = extract_string_after_key(block, "gutter").and_then(parse_hex_color) {
-                t.gutter_bg = c;
-            } else {
-                t.gutter_bg = Color(
-                    t.editor_bg.0.saturating_sub(15),
-                    t.editor_bg.1.saturating_sub(15),
-                    t.editor_bg.2.saturating_sub(15),
-                    255,
-                );
-            }
-            if let Some(c) =
-                extract_string_after_key(block, "gutterForeground").and_then(parse_hex_color)
-            {
-                t.lineno = c;
-                t.lineno_a = Color(
-                    (c.0 as u16 + 80).min(255) as u8,
-                    (c.1 as u16 + 80).min(255) as u8,
-                    (c.2 as u16 + 80).min(255) as u8,
-                    255,
-                );
-            }
-            continue;
-        }
-
-        let color = match fg.and_then(parse_hex_color) {
-            Some(c) => c,
-            None => continue,
-        };
-        for part in scope.unwrap().split(',') {
-            let part = part.trim();
-            if part.starts_with("comment") {
-                t.comment = Color(color.0, color.1, color.2, 140);
-            } else if part.starts_with("string") {
-                t.string = color;
-            } else if part.starts_with("constant.numeric") || part == "constant.other.color" {
-                t.number = color;
-            } else if part.starts_with("keyword.control") {
-                t.control = color;
-            } else if part.starts_with("keyword") || part.starts_with("storage") {
-                t.keyword = color;
-            } else if part.starts_with("entity.name.type")
-                || part.starts_with("support.type")
-                || part.starts_with("support.class")
-                || part.starts_with("entity.name.class")
-                || part.starts_with("variable.language")
-            {
-                t.ty = color;
-            } else if part.starts_with("entity.name.function")
-                || part.starts_with("support.function")
-            {
-                t.macro_col = color;
-            } else if part.starts_with("storage.modifier.lifetime") {
-                t.lifetime = color;
-            }
+pub fn load_json_theme(bytes: &[u8]) -> HashMap<String, Color> {
+    let value: serde_json::Value = from_slice(bytes).expect("Failed to read JSON theme file.");
+    let mut hashmap_from_json = HashMap::new();
+    //Load the syntax object from JSON.
+    if let Some(map) = value["syntax"].as_object() {
+        for (key, val) in map {
+            hashmap_from_json.insert(
+                key.to_string(),
+                parse_hex_color(val.as_str().expect("Theme value is not a string."))
+                    .expect("Failed to parse_hex_color"),
+            );
         }
     }
-    t
+    //Load the UI object from JSON.
+    if let Some(map) = value["ui"].as_object() {
+        for (key, val) in map {
+            hashmap_from_json.insert(
+                key.to_string(),
+                parse_hex_color(val.as_str().expect("Theme value is not a string."))
+                    .expect("Failed to parse_hex_color"),
+            );
+        }
+    }
+    hashmap_from_json
 }
 
 // ── Syntax helpers ────────────────────────────────────────────────────────────
@@ -169,29 +66,11 @@ pub fn char_range(s: &str, ca: usize, cb: usize) -> (usize, usize) {
     (start, end)
 }
 
-pub fn token_color(node_kind: &'static str, theme: &ThemeColors) -> Color {
-    match node_kind {
-        "use" | "fn" | "let" | "mut" | "pub" | "mod" | "struct" | "enum" | "impl" | "trait"
-        | "type" | "const" | "static" | "extern" | "crate" | "super" | "where" | "as" | "in"
-        | "ref" | "dyn" | "unsafe" | "async" | "await" | "move" | "true" | "false" => theme.keyword,
-        "::" => theme.default,
-        "if" | "else" | "for" | "while" | "match" | "loop" | "return" | "break" | "continue" => {
-            theme.control
-        }
-        "string_literal" | "raw_string_literal" | "string_content" => theme.string,
-        "integer_literal" | "float_literal" => theme.number,
-        "line_comment" | "block_comment" => theme.comment,
-        "type_identifier" | "primitive_type" => theme.ty,
-        "lifetime" => theme.lifetime,
-        _ => theme.default,
-    }
-}
-
 pub fn build_text_slice(
     lines: &[String],
     font: &Arc<Font>,
     cfg: &Settings,
-    theme: &ThemeColors,
+    theme: &HashMap<String, Color>,
     lang: &Lang,
 ) -> Text {
     let mut parser = Parser::new();
@@ -201,7 +80,7 @@ pub fn build_text_slice(
     /* Turns all the text of a Rust file into one giant String, which is what tree-sitter's parse()
     expects. */
     let source_code = lines.join("\n");
-    let mut tree = parser.parse(&source_code, None).unwrap();
+    let tree = parser.parse(&source_code, None).unwrap();
     let mut tree_cursor = tree.walk();
     let mut spans: Vec<Span> = Vec::new();
     let mut prev_end: usize = 0;
@@ -225,7 +104,7 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.default,
+                    theme.get("default").copied().unwrap(),
                     0.0,
                 ));
                 //Second span captures byte space of parent (token text) and colors it correctly.
@@ -236,7 +115,9 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.comment,
+                    //line_comment is the same color as block_comment. Not very principled,
+                    //but the JSON doesn't allow for something more elegant yet.
+                    theme.get("line_comment").copied().unwrap(),
                     0.0,
                 ));
 
@@ -252,7 +133,7 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    theme.default,
+                    theme.get("default").copied().unwrap(),
                     0.0,
                 ));
                 spans.push(Span::new(
@@ -260,7 +141,11 @@ pub fn build_text_slice(
                     cfg.font_size,
                     Some(cfg.line_height()),
                     font.clone(),
-                    token_color(current_node.kind(), theme),
+                    theme
+                        .get(current_node.kind())
+                        .copied()
+                        //default acts a fallback.
+                        .unwrap_or(theme.get("default").copied().unwrap()),
                     0.0,
                 ));
                 prev_end = end_byte;
@@ -286,7 +171,7 @@ pub fn build_gutter_slice(
     cursor_row: usize,
     font: &Arc<Font>,
     cfg: &Settings,
-    theme: &ThemeColors,
+    theme: &HashMap<String, Color>,
 ) -> Text {
     let fs = cfg.font_size;
     let lh = cfg.line_height();
@@ -298,14 +183,14 @@ pub fn build_gutter_slice(
                 fs,
                 Some(lh),
                 font.clone(),
-                theme.lineno,
+                theme.get("lineno").copied().unwrap(),
                 0.0,
             ));
         }
         let color = if abs_line == cursor_row {
-            theme.lineno_a
+            theme.get("lineno_a").copied().unwrap()
         } else {
-            theme.lineno
+            theme.get("lineno").copied().unwrap()
         };
         spans.push(Span::new(
             format!("{:>4}", abs_line + 1),

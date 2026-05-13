@@ -13,8 +13,7 @@ quartz = { path = "../quartz"}
 flowmango = { path = "../flowmango"}
 tree-sitter = "0.26.8"
 tree-sitter-rust = "0.24.2"
-
-
+serde_json = "1.0.149"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.43.0", features = ["rt-multi-thread", "sync", "time", "net"] }
