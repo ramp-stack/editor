@@ -126,4 +126,3 @@ pub fn show_image_mode(cv: &mut Canvas, id_prefix: &str, text_names: &[&str]) {
         o.visible = true;
     }
 }
-

@@ -105,6 +105,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             ],
         );
 
+        // ── Autosave ──────────────────────────────────────────────────────────
         {
             let timer = { *autosave_timer.get() };
             *autosave_timer.get_mut() = timer + 1.0 / 60.0;
@@ -125,6 +126,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             return;
         }
 
+        // ── Max line width ────────────────────────────────────────────────────
         {
             let cur_max = { *max_line_width_u.get() };
             if cur_max <= 0.0 {
@@ -142,6 +144,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Scroll intent (keyboard/drag-edge sustained drive) ────────────────
         {
             let intent = { *scroll_intent.get() };
             if intent != 0.0 {
@@ -149,10 +152,13 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Vertical scroll physics ───────────────────────────────────────────
         {
             let vel = { *scroll_vel_u.get() };
             if vel.abs() > 0.1 {
-                let v_max = ((total as f32 - 1.0) * lh).max(0.0);
+                // v_max: last line sits at top of viewport, not past the bottom
+                let viewport_h = (eh - cfg.text_y).max(0.0);
+                let v_max = ((total as f32) * lh - viewport_h).max(0.0);
                 let cur = { *scroll_u.get() };
                 let next = (cur + vel).clamp(0.0, v_max);
                 let new_vel = if next <= 0.0 || next >= v_max {
@@ -167,6 +173,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Horizontal scroll physics ─────────────────────────────────────────
         {
             let h_max = ({ *max_line_width_u.get() } - code_w).max(0.0);
             let h_vel = { *h_scroll_vel_u.get() };
@@ -190,6 +197,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         }
 
         let gs = { *scroll_u.get() };
+        let hs = { *h_scroll_u.get() };
         let first_visible = (gs / lh).floor() as usize;
         let sub_line_offset = gs - first_visible as f32 * lh;
         let (slice_start, text_top) = if first_visible > 0 {
@@ -230,6 +238,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Text + gutter slices ──────────────────────────────────────────────
         {
             let st = state_u.lock().unwrap();
             if last_visible > slice_start {
@@ -273,8 +282,8 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
 
         if let Some(o) = cv.get_game_object_mut(&names_u.code_text) {
             o.position.0 = code_x - hs;
-            o.set_clip_origin(Some((ex + cfg.text_x, ey)));
-            o.set_clip_size(Some((code_w + hs, eh)));
+            o.set_clip_origin(Some((ex, ey)));
+            o.set_clip_size(Some((ew, eh)));
         }
         if let Some(o) = cv.get_game_object_mut(&names_u.bg) {
             o.position = (ex, ey);
@@ -295,6 +304,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             ));
         }
 
+        // ── Selection overlays ────────────────────────────────────────────────
         {
             let st = state_u.lock().unwrap();
             let sel = st.selection();
@@ -350,6 +360,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
         }
 
+        // ── Cursor ────────────────────────────────────────────────────────────
         let cursor_x = code_x + cur_col as f32 * cw - hs;
         let cursor_y = text_top + (cur_row as f32 - slice_start as f32) * lh;
         let in_view = cursor_x >= code_x
@@ -391,4 +402,3 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         }
     });
 }
-
