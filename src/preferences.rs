@@ -1,9 +1,11 @@
 use quartz::Color;
 
-// ── CursorStyle ───────────────────────────────────────────────────────────────
-
 #[derive(Clone, Copy)]
-pub enum CursorStyle { Line, Block, Underline }
+pub enum CursorStyle {
+    Line,
+    Block,
+    Underline,
+}
 
 impl CursorStyle {
     pub fn size(&self, line_height: f32, char_width: f32) -> (f32, f32, f32) {
@@ -40,15 +42,14 @@ impl CursorStyle {
                 let fill      = image::Rgba([180, 140, 255,  60]);
                 let bar_color = image::Rgba([180, 140, 255, 200]);
                 for y in 0..ph { for x in 0..pw {
-                    img.put_pixel(x, y, if y >= ph.saturating_sub(bar_h) { bar_color } else { fill });
+                    img.put_pixel(x, y,
+                        if y >= ph.saturating_sub(bar_h) { bar_color } else { fill });
                 }}
             }
         }
         img
     }
 }
-
-// ── Settings ──────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
 pub struct Settings {

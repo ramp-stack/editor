@@ -1,404 +1,468 @@
 ================================================================================
-  CONCEPT
+  EDITOR — PROJECT FILE LAYOUT
 ================================================================================
 
-A reusable code editor component for Quartz projects. Renders syntax-highlighted
-text with a line-number gutter, a blinking cursor, click-to-position, keyboard
-editing, auto-pairs, auto-indent, and autosave. Also handles image files,
-switching to an image-viewer mode automatically based on file extension.
+Cargo.toml
+src/
+  lib.rs
+  constants.rs
+  preferences.rs
+  components/
+    mod.rs
+    auto_pairs.rs
+    cursor.rs
+    highlight.rs
+    image_view.rs
+    language.rs
+    scroll.rs
+    selection.rs
+    theme.rs
+  editor/
+    mod.rs
+    state.rs
+  logic/
+    mod.rs
+    editor_obj.rs
+    input.rs
+  objects/
+    mod.rs
+    editor_obj.rs
 
 ================================================================================
-  CANVAS VARS
+  src/lib.rs
 ================================================================================
+  CRATE ROOT — module declarations and re-exports only.
 
-None managed directly — all state lives in Shared<T> on the Editor struct.
-
-================================================================================
-  CONSTANTS  (src/constants.rs)
-================================================================================
-
-RIGHT_PAD              f32   Padding between last character and right clip edge.
-AUTOSAVE_INTERVAL_SECS f64   Seconds between autosave flushes when dirty.
-BLINK_IDLE_SECS        f32   Seconds of idle before cursor starts blinking.
-BLINK_RATE_SECS        f32   Blink cycle duration in seconds.
-KW                     &[&str]  Rust keywords coloured with theme.keyword.
-CTRL                   &[&str]  Rust control-flow words coloured with theme.control.
-
-================================================================================
-  PREFERENCES  (src/preferences.rs)
-================================================================================
-
-CursorStyle  (enum, Copy)
-  Line       — 2px vertical bar, solid white
-  Block      — full character cell, semi-transparent purple with outline
-  Underline  — full width, 3px bar at bottom with semi-transparent fill
-
-  size(line_height, char_width) -> (w, h, _)
-    Returns the pixel dimensions for the cursor image.
-  build_image(w, h) -> RgbaImage
-    Renders the cursor as a pixel image for use as a GameObject sprite.
-
-Settings  (struct, Clone, Copy)
-  font_size                f32    Text render size. Default 13.0.
-  line_height_mul          f32    line_height = font_size * mul. Default 1.55.
-  char_width_mul           f32    char_width  = font_size * mul. Default 0.601.
-  text_x                   f32    X offset of code text from editor left. Default 48.0.
-  text_y                   f32    Y offset of code text from editor top. Default 20.0.
-  gutter_w                 f32    Width of line-number gutter. Default 48.0.
-  backspace_deletes_before bool   Backspace deletes char before cursor. Default true.
-  cursor_style             CursorStyle  Default Underline.
-  cursor_blink             bool   Whether cursor blinks after idle. Default true.
-  auto_pairs               bool   Insert matching close bracket/quote. Default true.
-  border_color             (u8,u8,u8,u8)  Unused border colour slot.
-  border_thickness         f32    Unused.
-  border_padding           f32    Unused.
-  scroll_accel             f32    Velocity added per scroll event unit. Default 5.5.
-  scroll_friction          f32    Velocity multiplier per tick (decay). Default 0.10.
-  scroll_max               f32    Maximum scroll velocity. Default 90.0.
-
-  Helpers:
-    line_height() -> f32   font_size * line_height_mul
-    char_width()  -> f32   font_size * char_width_mul
-    cursor_size() -> (f32, f32, f32)   delegates to CursorStyle::size
-
-================================================================================
-  INTERNAL TYPES  (src/editor/)
-================================================================================
-
---------------------------------------------------------------------------------
-  editor/viewer.rs
---------------------------------------------------------------------------------
-
-FileMode  (enum, Clone, PartialEq)
-  Text   — any file that can be opened as UTF-8 text
-  Image  — png, jpg, jpeg, gif, bmp, webp, tiff, tif, ico
-
-Lang  (enum, Clone, PartialEq)
-  Rust   — .rs files, receives syntax highlighting
-  Plain  — everything else, rendered without highlighting
-
-file_mode(path) -> FileMode    Classifies a path by extension.
-file_lang(path) -> Lang        Classifies a path by extension.
-
-img_obj_name(id_prefix) -> String
-  Returns the name of the image GameObject: "{id_prefix}_img".
-
-mount_image_obj(cv, id_prefix, mode, path, x, y, w, h, layer)
-  Spawns the image-view GameObject. Visible only when mode == Image.
-  Called once from objects/editor_obj.rs during setup.
-
-update_image_obj(cv, id_prefix, path, x, y, w, h, loaded_key)
-  Called every frame in on_update when in Image mode.
-  Caches by "path|w|h" — only reloads the image when that key changes.
-
-show_text_mode(cv, id_prefix, text_names)
-  Hides the image object, shows all text GameObjects.
-
-show_image_mode(cv, id_prefix, text_names)
-  Hides all text GameObjects, shows the image object.
-
---------------------------------------------------------------------------------
-  editor/highlight.rs
---------------------------------------------------------------------------------
-
-ThemeColors  (struct, Clone)
-  default   Color   Default text colour.
-  keyword   Color   Rust keywords (fn, let, pub, etc).
-  control   Color   Rust control flow (if, match, return, etc).
-  ty        Color   Types, Self, self, uppercase identifiers.
-  string    Color   String and char literals.
-  number    Color   Numeric literals.
-  comment   Color   Line comments (rendered at alpha 140).
-  macro_col Color   Macro calls (identifier followed by !).
-  lifetime  Color   Lifetime annotations ('a).
-  lineno    Color   Inactive line numbers. Default grey.
-  lineno_a  Color   Active line number (cursor row). Brighter grey.
-  hud       Color   Unused HUD accent slot.
-  gutter_bg Color   Gutter background. Derived from editor_bg minus 15.
-  editor_bg Color   Editor background from theme file.
-
-load_tm_theme(bytes) -> ThemeColors
-  Parses a .tmTheme XML file and maps scope rules to ThemeColors fields.
-  Falls back to zero-colours if the file is invalid UTF-8.
-
-token_color(word, next_char, theme) -> Color
-  Returns the syntax colour for a single token given its text and the
-  character immediately following it in the source line.
-
-char_range(s, ca, cb) -> (usize, usize)
-  Converts a char-index range to a byte-index range for safe slicing.
-
-build_text_slice(lines, font, cfg, theme, lang) -> Text
-  Builds a quartz Text object for a slice of source lines. For Rust files,
-  tokenises each line and assigns per-token colours. For non-Rust files,
-  renders the entire line in theme.default.
-
-build_gutter_slice(abs_start, abs_end, cursor_row, font, cfg, theme) -> Text
-  Builds a right-aligned Text object for line numbers abs_start..abs_end.
-  The cursor row is rendered in lineno_a; all others in lineno.
-
---------------------------------------------------------------------------------
-  editor/mod.rs
---------------------------------------------------------------------------------
-
-EditorState  (pub(crate))
-  lines       Vec<String>   File content split by newline.
-  cursor_row  usize         Current cursor line (0-based).
-  cursor_col  usize         Current cursor byte offset in the line.
-  dirty       bool          True when unsaved changes exist.
-  path        String        Absolute path of the open file.
-  mode        FileMode      Text or Image.
-  lang        Lang          Rust or Plain.
-  sel_anchor  Option<(usize, usize)>  Start point of the active selection.
-  sel_active  Option<(usize, usize)>  Current live end point of the selection.
-
-  clamp_col()                    Clamps cursor_col to line length.
-  save()                         Writes lines.join("\n") to disk, clears dirty.
-  char_at(row, col)              Returns the char at the given position.
-  char_before(row, col)          Returns the char immediately before the cursor.
-  anchor_at_cursor()             Sets sel_anchor to current cursor position.
-  extend_selection_to_cursor()   Sets sel_active to current cursor position.
-  clear_selection()              Clears both sel_anchor and sel_active.
-  selection() -> Option<((usize,usize),(usize,usize))>
-                                 Returns the normalised (start, end) of the
-                                 selection, or None if no selection is active.
-  selected_text() -> String      Returns the currently selected text.
-
-ObjNames  (pub(crate))
-  bg, gutter_bg, gutter, code_text, cursor  — all prefixed with id_prefix.
-  from_prefix(p) -> ObjNames
-
-Editor  (pub, Clone via Arc/Shared internals)
-  Fields relevant to selection and drag:
-    dragging   Shared<bool>   True while a left-button drag is in progress.
-
-  Public API surface:
-    new(x, y, w, h, code_font, gutter_font, file_path, theme_bytes, settings)
-    with_id(id, ...)   — same but sets a custom id prefix for multi-editor canvases
-    id()               — returns the id prefix string
-    set_bounds(x, y, w, h)
-    get_bounds() -> (f32, f32, f32, f32)
-    open_file(path)    — saves if dirty, loads new file, resets scroll/state
-    apply_settings(settings)
-    reload_theme(bytes)
-    mount(cv)          — delegates to objects::editor_obj::setup
-    register_callbacks(cv) — delegates to logic::input::register then
-                             logic::editor_obj::register
-
-================================================================================
-  OBJECTS  (src/objects/)
-================================================================================
-
-Each file has a single pub fn setup(cv: &mut Canvas, ...).
-Construction only — no events, no on_update.
-
---------------------------------------------------------------------------------
-  objects/editor_obj.rs
---------------------------------------------------------------------------------
-
-pub fn setup(cv: &mut Canvas, ed: &Editor)
-
-Builds all GameObjects the editor needs and adds them to the canvas.
-
-  {id}_bg
-    Background fill. Uses theme.editor_bg via tint_overlay.
-    layer 0, always visible.
-
-  {id}_img
-    Image viewer sprite. Visible only in Image mode.
-    Spawned by mount_image_obj from viewer.rs.
-    layer 1.
-
-  {id}_gutter_bg
-    Gutter background fill. Uses theme.gutter_bg.
-    layer 2, hidden in Image mode.
-
-  {id}_gutter
-    Line numbers Text object. Clipped to gutter region.
-    layer 3, hidden in Image mode.
-
-  {id}_sel_{i}  (i in 0..SEL_OVERLAY_COUNT)
-    Selection highlight rectangle for visible line slot i.
-    Colour: Color(38, 79, 120, 180) — VS Code-style blue tint.
-    layer 2, starts hidden. One object per visible line slot.
-    Positioned, sized, and shown/hidden each frame by logic/editor_obj.rs.
-
-  {id}_code_text
-    Syntax-highlighted source Text object. Clipped to code region.
-    layer 1, hidden in Image mode.
-
-  {id}_cursor
-    Cursor sprite built from CursorStyle::build_image.
-    layer 4, hidden in Image mode.
-
-================================================================================
-  LOGIC  (src/logic/)
-================================================================================
-
---------------------------------------------------------------------------------
-  logic/input.rs
---------------------------------------------------------------------------------
-
-pub fn register(cv: &mut Canvas, ed: &Editor)
-
-Registers all mouse and keyboard input handlers. No on_update here.
-
-  on_key_press
-    Guards: only fires if mouse is inside editor bounds.
-    Resets idle_timer, blink_timer, cursor_vis on every keypress.
-    Ignores input if lines is empty (image mode).
-    Modifier state read via cv.is_key_held(&Key::Named(NamedKey::Control))
-    and cv.is_key_held(&Key::Named(NamedKey::Shift)).
-
-    Ctrl combos (handled first, return early after):
-      Ctrl+S           — st.save()
-      Ctrl+Z           — println stub (undo not yet implemented)
-      Ctrl+Shift+Z     — println stub (redo not yet implemented)
-      Ctrl+C           — println stub (copy not yet implemented)
-      Ctrl+X           — println stub (cut not yet implemented)
-      Ctrl+V           — println stub (paste not yet implemented)
-      Ctrl+A           — selects all text (sets sel_anchor to (0,0) and
-                         sel_active to end of last line)
-      Ctrl+D           — println stub (duplicate line not yet implemented)
-      Ctrl+/           — toggle // line comment on cursor row
-      Ctrl+Home        — cursor to first line, column 0
-      Ctrl+End         — cursor to last line, end of line
-      Ctrl+ArrowUp     — println stub (move line up not yet implemented)
-      Ctrl+ArrowDown   — println stub (move line down not yet implemented)
-
-    Bare / Shift keys:
-      Shift+Arrow/Home/End — extend selection from anchor; anchor is set on
-                             first Shift press if not already set; sel_active
-                             tracks the moving end of the selection.
-      ArrowUp/Down         — move cursor; if cursor moves past the first or
-                             last visible row, sets scroll_intent to drive
-                             scroll_vel in the tick loop for as long as the
-                             key is held. Intent is cleared once cursor is
-                             safely mid-viewport.
-      ArrowLeft/Right      — move cursor; clears scroll_intent.
-      Home / End           — jump cursor to start/end of line; clears
-                             scroll_intent.
-      Space                — insert space at cursor.
-      Enter                — insert newline with auto-indent; if cursor is
-                             between a matching pair ({}, [], ()) inserts an
-                             extra indented line between them.
-      Delete / Backspace   — respects backspace_deletes_before setting; if
-                             auto_pairs and cursor is between a matching pair,
-                             deletes both characters at once.
-      Tab                  — inserts 4 spaces.
-      Character            — inserts the character; if auto_pairs and the char
-                             is a closing bracket/quote that already exists at
-                             the cursor, advances instead of inserting;
-                             otherwise inserts and adds matching close char if
-                             applicable.
-
-  on_mouse_press
-    Guards: Left button only, inside editor bounds.
-    Resets idle/blink timers, sets cursor_vis = true.
-    Converts click position to row/col using line_height and char_width.
-    Sets sel_anchor and sel_active to the clicked position.
-    Sets dragging = true.
-
-  on_mouse_move
-    Guards: only runs when dragging = true.
-    Scroll intent:
-      If my < ey (above editor): sets scroll_vel and scroll_intent to a
-        negative impulse scaled by overshoot distance (up to 8 lines).
-      If my > ey + eh (below editor): sets scroll_vel and scroll_intent to a
-        positive impulse scaled by overshoot.
-      If inside editor vertically: sets scroll_intent to ±scroll_max*0.5 if
-        the cursor has reached the first or last visible row, else 0.0.
-    Selection update:
-      Clamps mx/my to editor bounds (mx_c, my_c) so the selection extends to
-      the edge even when the pointer is outside. Updates cursor_row, cursor_col,
-      and sel_active from the clamped position.
-
-  on_mouse_release
-    Guards: Left button only, drag must be active.
-    Sets dragging = false.
-    Clears scroll_vel and scroll_intent to stop all momentum on release.
-
-  on_mouse_scroll
-    Guards: inside editor bounds.
-    Applies velocity impulse to scroll_vel (vertical) and
-    h_scroll_vel (horizontal).
-
---------------------------------------------------------------------------------
-  logic/editor_obj.rs
---------------------------------------------------------------------------------
-
-pub fn register(cv: &mut Canvas, ed: &Editor)
-
-Registers on_update. No input handlers here.
-Clones: cfg_u, theme_u, code_font_u, gutter_font_u, scroll_u, h_scroll_u,
-  scroll_vel_u, h_scroll_vel_u, max_line_width_u, state_u, blink_timer,
-  idle_timer, cursor_vis, autosave_timer, live_x/y/w/h_u, names_u,
-  id_prefix_u, img_loaded_key_u, scroll_intent, dragging_u.
-
-  on_update  (runs every tick)
-    Reads live_x/y/w/h for current bounds.
-    Reads mode/path/lang from EditorState.
-
-    Image mode path:
-      Calls update_image_obj — reloads only when path+size key changes.
-      Calls show_image_mode — hides text objects, shows image object.
-      Hides all selection overlay objects.
-      Returns early.
-
-    Text mode path:
-      Calls show_text_mode — shows text objects, hides image object.
-      Autosave: increments autosave_timer, flushes if >= AUTOSAVE_INTERVAL_SECS.
-      Max line width: computes once on first frame or after open_file resets it.
-      Scroll intent: if scroll_intent != 0.0, writes it into scroll_vel each
-        tick so the tick loop sustains scrolling while a key or drag edge is
-        held.
-      Vertical scroll physics: applies scroll_vel to global_scroll with friction
-        and clamping to (0, (total_lines - 1) * line_height).
-      Horizontal scroll physics: applies h_scroll_vel to h_scroll with friction
-        and clamping to (0, max_line_width - code_w).
-      Drag-select tick update: if dragging = true, reads cv.mouse_position()
-        (returns last known position even after the pointer leaves the OS
-        window), clamps to editor bounds, and recomputes cursor_row, cursor_col,
-        and sel_active against the current scroll offset. This causes the
-        selection to extend naturally as scroll physics move the content
-        underneath the frozen pointer position.
-      Slice rendering: computes first_visible and last_visible from scroll,
-        builds text + gutter slices, updates code_text and gutter drawables.
-      Clip updates: keeps clip_origin and clip_size in sync with live bounds.
-      Background + gutter_bg: resize images if bounds changed.
-      Selection overlays: iterates SEL_OVERLAY_COUNT slots. For each slot,
-        maps slot index to an absolute document row (slice_start + i). If a
-        selection exists and the row falls within it, computes pixel x_start
-        and x_end from column indices (clamped, h-scroll adjusted), positions
-        and sizes the overlay, and marks it visible. Resizes the tint_overlay
-        image only when width changes by more than 0.5 px to avoid per-frame
-        pixel-buffer allocations. Rows outside the selection are hidden.
-      Cursor: positions cursor_x/y from cur_row/col, checks in_view,
-        advances blink_timer and toggles cursor_vis after BLINK_IDLE_SECS +
-        BLINK_RATE_SECS cycle, sets visible.
-
-================================================================================
-  LIB  (src/lib.rs)
-================================================================================
-
-Module declarations and re-exports only.
-
+  pub mod components
+  pub mod constants
+  pub mod editor
+  pub mod logic
+  pub mod objects
+  pub mod preferences
   pub use editor::Editor
-  pub use editor::highlight::ThemeColors
-
-  pub mod prelude
-    pub use editor::Editor
-    pub use preferences::Settings
-    pub use preferences::CursorStyle
-
-  impl Editor
-    mount(cv)              → objects::editor_obj::setup(cv, self)
-    register_callbacks(cv) → logic::input::register(cv, self)
-                             logic::editor_obj::register(cv, self)
+  pub mod prelude { Editor, CursorStyle, Settings }
 
 ================================================================================
-  RESOURCES
+  src/constants.rs
+================================================================================
+  Project-wide compile-time constants.
+
+  RIGHT_PAD:              f32 = 0.0
+  AUTOSAVE_INTERVAL_SECS: f64 = 5.0
+  BLINK_IDLE_SECS:        f32 = 0.5
+  BLINK_RATE_SECS:        f32 = 0.53
+
+================================================================================
+  src/preferences.rs
+================================================================================
+  Editor configuration structs. No runtime logic.
+
+  enum CursorStyle { Line, Block, Underline }
+    fn size(line_height, char_width) -> (w, h, _)
+    fn build_image(w, h) -> RgbaImage
+
+  struct Settings (Copy)
+    font_size, line_height_mul, char_width_mul
+    text_x, text_y, gutter_w
+    backspace_deletes_before: bool
+    cursor_style: CursorStyle
+    cursor_blink: bool
+    auto_pairs: bool
+    border_color, border_thickness, border_padding
+    scroll_accel, scroll_friction, scroll_max
+
+    fn line_height() -> f32          [font_size * line_height_mul]
+    fn char_width()  -> f32          [font_size * char_width_mul]
+    fn cursor_size() -> (w, h, _)
+
+================================================================================
+  src/components/mod.rs
+================================================================================
+  Re-exports all sub-components. No logic.
+
+  pub mod auto_pairs
+  pub mod cursor
+  pub mod highlight
+  pub mod image_view
+  pub mod language
+  pub mod scroll
+  pub mod selection
+  pub mod theme
+
+================================================================================
+  src/components/auto_pairs.rs
+================================================================================
+  Bracket/quote auto-insertion helpers. Pure functions, no state.
+
+  fn pair_close(c: char) -> Option<char>
+    '(' -> ')'  '[' -> ']'  '{' -> '}'  '"' -> '"'
+
+  fn is_pair(open: char, close: char) -> bool
+    True when (open, close) is a recognised pair.
+
+  fn should_delete_pair(prev: Option<char>, next: Option<char>) -> bool
+    True when backspace inside an empty pair should delete both characters.
+
+================================================================================
+  src/components/cursor.rs
+================================================================================
+  Cursor blink state and viewport position helpers.
+
+  struct BlinkState
+    visible: bool
+    fn new(idle_threshold, blink_rate) -> Self
+    fn tick(dt, blinking_enabled) -> bool    [returns true if visibility changed]
+    fn reset()                               [call on any keypress/mouse event]
+
+  fn cursor_position(cursor_row, cursor_col, slice_start, text_top,
+                     code_x, h_scroll, char_width, line_height) -> (x, y)
+
+  fn cursor_in_view(cursor_x, cursor_y, code_x, ex, ey, ew, eh,
+                    right_pad, text_y) -> bool
+
+================================================================================
+  src/components/highlight.rs
+================================================================================
+  Tree-sitter syntax highlighting and gutter line numbers.
+
+  fn char_range(s, ca, cb) -> (start_byte, end_byte)
+    Convert character range to byte range within string s.
+
+  fn build_text_slice(lines, font, cfg, theme, lang) -> Text
+    Dispatches on Lang:
+      Lang::Rust  -> tree-sitter highlighted spans
+      Lang::Plain -> single-span plain text
+
+  fn build_gutter_slice(abs_start, abs_end, cursor_row, font, cfg, theme) -> Text
+    Right-aligned line numbers. cursor_row gets highlight color "lineno_a",
+    all others get "lineno".
+
+================================================================================
+  src/components/image_view.rs
+================================================================================
+  Image-file rendering. Manages one GameObject per editor instance.
+  Object name: "{id_prefix}_img"
+
+  fn obj_name(id_prefix) -> String
+
+  fn mount(cv, id_prefix, mode, path, x, y, w, h, layer)
+    Spawns the image GameObject. Hidden placeholder when mode == Text.
+
+  fn update(cv, id_prefix, path, x, y, w, h, loaded_key)
+    Reloads from disk only when (path|w|h) key changes. Uses loaded_key
+    Shared<String> cache to avoid redundant reads.
+
+  fn show(cv, id_prefix, text_names)
+    Hides all text objects, makes image object visible.
+
+  fn hide(cv, id_prefix, text_names)
+    Hides image object, makes all text objects visible.
+
+================================================================================
+  src/components/language.rs
+================================================================================
+  File-mode and language detection from path extension.
+
+  enum FileMode { Text, Image }
+  enum Lang     { Rust, Plain }
+
+  fn file_mode(path) -> FileMode
+    Image extensions: png jpg jpeg gif bmp webp tiff tif ico
+
+  fn file_lang(path) -> Lang
+    Rust: .rs   everything else: Plain
+
+================================================================================
+  src/components/scroll.rs
+================================================================================
+  Momentum scroll physics for one axis. Used for both V and H scroll.
+
+  struct ScrollAxis (Default)
+    offset:   f32    [current scroll position in px]
+    velocity: f32    [current momentum in px/tick]
+
+    fn push(delta, max_speed)
+      Adds delta to velocity, clamps to [-max_speed, max_speed].
+      Call from scroll events to accumulate impulse.
+
+    fn set_intent(vel)
+      Overwrite velocity directly (sustained drive: key held, drag edge).
+
+    fn tick(friction, max_offset) -> bool
+      Advance one frame: offset += velocity, decay velocity by friction,
+      kill velocity at boundaries. Returns true if offset moved.
+
+    fn jump_to(pos, max_offset)
+      Instant position set, zeroes velocity.
+
+    fn reset()
+      Sets offset=0 and velocity=0.
+
+================================================================================
+  src/components/selection.rs
+================================================================================
+  Text selection state. Pure functions — no mutation, no Canvas dependency.
+
+  type SelectionRange = ((row, col), (row, col))   [start <= end, doc order]
+
+  fn selection(anchor, active) -> Option<SelectionRange>
+    Returns None for zero-width or unset selections.
+
+  fn selected_text(lines, anchor, active) -> String
+    Extracts selected text from lines. Handles single-row and multi-row.
+
+  struct RowOverlay
+    abs_row: usize   [document row index]
+    x_start: f32
+    width:   f32
+    y:       f32
+
+  fn overlay_rects(anchor, active, lines, slice_start, visible_rows,
+                   text_top, code_x, h_scroll, char_width, line_height,
+                   min_width) -> Vec<RowOverlay>
+    Computes highlight rectangle geometry for every visible selected row.
+
+================================================================================
+  src/components/theme.rs
+================================================================================
+  JSON theme loading. Theme files have "syntax" and "ui" top-level objects.
+
+  fn parse_hex_color(s) -> Option<Color>
+    Accepts "#rrggbb" (alpha=255) and "#rrggbbaa".
+
+  fn load_json_theme(bytes) -> HashMap<String, Color>
+    Merges "syntax" and "ui" sections into one flat map keyed by token name.
+    Known keys used at runtime:
+      editor_bg, gutter_bg, default, lineno, lineno_a, line_comment
+      + any tree-sitter node kind (e.g. "identifier", "string_literal")
+
+================================================================================
+  src/editor/mod.rs
+================================================================================
+  Editor struct: owns all shared state, provides public API.
+
+  struct ObjNames { bg, gutter_bg, gutter, code_text, cursor }
+    fn from_prefix(p) -> Self
+
+  const SEL_OVERLAY_COUNT: usize = 80
+  fn sel_overlay_name(prefix, i) -> String   ["{prefix}_sel_{i}"]
+
+  struct Editor
+    id_prefix:      Arc<String>
+    live_x/y/w/h:  Shared<f32>        [updated by set_bounds()]
+    cfg:            Shared<Settings>
+    code_font:      Arc<Font>
+    gutter_font:    Arc<Font>
+    theme:          Shared<HashMap<String, Color>>
+    state:          Arc<Mutex<EditorState>>
+    v_scroll:       Shared<ScrollAxis>   [vertical scroll]
+    h_scroll:       Shared<ScrollAxis>   [horizontal scroll]
+    max_line_width: Shared<f32>
+    blink_timer:    Shared<f32>
+    idle_timer:     Shared<f32>
+    cursor_vis:     Shared<bool>
+    autosave_timer: Shared<f64>
+    img_loaded_key: Shared<String>
+    dragging:       Shared<bool>
+    scroll_intent:  Shared<f32>          [sustained velocity: key/drag-edge]
+
+    fn new(x,y,w,h, code_font, gutter_font, file_path, theme_bytes, settings)
+    fn with_id(id, x,y,w,h, ...)        [same as new() but custom id prefix]
+    fn id() -> &str
+    fn set_bounds(x, y, w, h)           [also resets max_line_width on width change]
+    fn get_bounds() -> (x, y, w, h)
+    fn open_file(file_path)             [saves if dirty, loads new file, resets scroll]
+    fn apply_settings(Settings)         [resets max_line_width]
+    fn reload_theme(bytes)              [resets max_line_width]
+    fn mount(cv)                        [calls objects::editor_obj::setup]
+    fn register_callbacks(cv)           [calls logic::input + logic::editor_obj]
+
+================================================================================
+  src/editor/state.rs
+================================================================================
+  EditorState: document text, cursor, selection. No Canvas dependency.
+
+  struct EditorState
+    lines:      Vec<String>
+    cursor_row: usize
+    cursor_col: usize
+    dirty:      bool
+    path:       String
+    mode:       FileMode
+    lang:       Lang
+    sel_anchor: Option<(row, byte_col)>
+    sel_active: Option<(row, byte_col)>
+
+    fn clamp_col()                      [clamp cursor_col to current line length]
+    fn save()                           [write lines.join("\n") to disk]
+    fn char_at(row, col) -> Option<char>
+    fn char_before(row, col) -> Option<char>
+    fn selection() -> Option<SelectionRange>   [delegates to components::selection]
+    fn selected_text() -> String               [delegates to components::selection]
+    fn clear_selection()
+    fn anchor_at_cursor()
+    fn extend_selection_to_cursor()
+
+  fn load(file_path) -> EditorState
+    Reads file from disk. Returns empty line vec for image files.
+
+================================================================================
+  src/logic/mod.rs
+================================================================================
+  pub mod editor_obj
+  pub mod input
+
+================================================================================
+  src/logic/editor_obj.rs
+================================================================================
+  on_update loop: scroll physics, text rendering, selection overlays, cursor.
+  Registered via Editor::register_callbacks -> logic::editor_obj::register.
+
+  fn register(cv, ed)
+    Registers one on_update callback. Each tick:
+      1. Update background size/color
+      2. Image mode: call image_view::update + show, hide overlays, return early
+      3. Autosave timer (AUTOSAVE_INTERVAL_SECS)
+      4. Recompute max_line_width if zero (on file open or settings change)
+      5. Apply scroll_intent to v_scroll.velocity if non-zero
+      6. v_scroll.tick(friction, v_max)  — vertical momentum
+      7. h_scroll.tick(friction, h_max)  — horizontal momentum
+      8. Compute slice_start, text_top from scroll offset
+      9. Drag cursor update (while dragging == true)
+     10. build_text_slice + build_gutter_slice for visible rows
+     11. Update code_text and gutter GameObjects (position + drawable)
+     12. selection::overlay_rects -> update SEL_OVERLAY_COUNT pool objects
+     13. Cursor blink timer, cursor position, cursor visibility
+
+================================================================================
+  src/logic/input.rs
+================================================================================
+  All input event handlers.
+  Registered via Editor::register_callbacks -> logic::input::register.
+
+  fn register(cv, ed)
+    Calls all four sub-registrations below.
+
+  fn register_keys(cv, ed)
+    on_key_press:
+      Guard: mouse must be inside editor bounds.
+      Resets idle_timer, blink_timer, cursor_vis.
+      Ctrl combos -> handle_ctrl_key()
+      Bare/Shift keys:
+        ArrowUp/Down   — move cursor, set scroll_intent when cursor at edge
+        ArrowLeft/Right — move cursor, clear scroll_intent
+        Home/End       — jump to line start/end, extend selection if Shift
+        Space          — insert space
+        Enter          — smart indent, detect pair (e.g. {} -> newline+indent)
+        Delete/Backspace — auto-pair aware deletion
+        Tab            — insert 4 spaces
+        Character      — insert char, auto-pair close insertion
+
+  fn handle_ctrl_key(key, shift, state)
+    s: save    z: undo/redo (stub)    c: copy    x: cut (stub)
+    v: paste (stub)    a: select all    /: toggle line comment
+    Home/End: jump to document start/end
+
+  fn register_mouse_press(cv, ed)
+    on_mouse_press (Left only, inside bounds):
+      Resets idle/blink timers.
+      Computes row/col from mouse position + scroll.
+      Sets cursor, sets sel_anchor = sel_active = (row, col).
+      Sets dragging = true.
+
+  fn register_mouse_move(cv, ed)
+    on_mouse_move (only when dragging):
+      Above editor: sets v_scroll.velocity + scroll_intent (proportional overshoot)
+      Below editor: same but positive direction
+      Inside editor at edge row: sets scroll_intent for sustained scroll
+      Inside editor mid-viewport: clears scroll_intent
+      Updates cursor_row/col and sel_active from clamped mouse position.
+
+  fn register_mouse_release(cv, ed)
+    on_mouse_release (Left only):
+      Sets dragging = false.
+      Kills v_scroll.velocity and scroll_intent.
+
+  fn register_mouse_scroll(cv, ed)
+    on_mouse_scroll (inside bounds only):
+      dy != 0: v_scroll.push(dy * scroll_accel, scroll_max)
+      dx != 0: h_scroll.push(dx * scroll_accel, scroll_max), respects h_max boundary
+
+================================================================================
+  src/objects/mod.rs
+================================================================================
+  pub mod editor_obj
+
+================================================================================
+  src/objects/editor_obj.rs
+================================================================================
+  Initial GameObject creation. Called once during Editor::mount.
+
+  fn setup(cv, ed)
+    Creates (in layer order):
+      layer 0  — bg            solid background rect (tint_overlay)
+      layer 1  — {id}_img      image view (hidden if text mode)
+      layer 1  — code_text     Text drawable, clipped to code area
+      layer 2  — gutter_bg     solid gutter background rect
+      layer 2  — sel_{0..79}   selection highlight overlay pool (hidden)
+      layer 3  — gutter        Text drawable, right-aligned line numbers
+      layer 4  — cursor        cursor rect (Line/Block/Underline image)
+
+    Also pre-computes max_line_width from the longest line at load time.
+
+================================================================================
+  DEPENDENCY GRAPH (which file uses which component)
 ================================================================================
 
-No resources owned by this crate. Font bytes and theme bytes are passed in
-by the caller. File paths are provided at runtime via new() or open_file().
+  logic/editor_obj.rs  ->  components/cursor
+                       ->  components/highlight
+                       ->  components/image_view
+                       ->  components/language
+                       ->  components/scroll        (ScrollAxis.tick)
+                       ->  components/selection     (overlay_rects)
+
+  logic/input.rs       ->  components/auto_pairs
+                       ->  components/scroll        (ScrollAxis.push / set_intent)
+                       ->  editor/state             (EditorState methods)
+
+  objects/editor_obj.rs -> components/highlight     (initial text build)
+                        -> components/image_view    (mount)
+                        -> components/language      (file_lang for init)
+
+  editor/mod.rs        ->  components/scroll        (ScrollAxis fields)
+                       ->  components/theme         (load_json_theme)
+                       ->  editor/state             (load)
+
+  editor/state.rs      ->  components/language      (FileMode, Lang, file_mode, file_lang)
+                       ->  components/selection     (selection, selected_text)
+
+================================================================================
+  SCROLL FLOW (how a scroll event becomes a reposition)
+================================================================================
+
+  on_mouse_scroll fires
+    -> state.push_scroll(dy * scroll_speed, scroll_speed_max)
+       [adds to scroll_velocity, caps at scroll_speed_max]
+
+  on_update fires every tick (~60 Hz)
+    -> state.tick_scroll(scroll_friction)
+       [scroll_y += scroll_velocity; velocity *= friction; returns true if moved]
+    -> if moved: Explorer::reposition_rows()
+       [moves all row GameObjects by Y offset only, no SVG rebuild]
+
+  ConnectorRenderer::reposition_all (inside reposition_rows)
+    -> per-segment Y update only (each segment is row_height tall)
+    -> clip rect stays fixed to panel bounds
+
+================================================================================
+  CONNECTOR LINE ARCHITECTURE
+================================================================================
+
+  One GameObject per ROW per connector group (not one per group).
+  Each object is exactly row_height px tall.
+  Two SVG images shared across all segments:
+    straight  — vertical bar, used for non-final rows in a group
+    corner    — vertical to mid-row then rounded turn right, used for last row
+  On scroll: only obj.position.y changes. No SVG, no image reload.
+
+================================================================================
