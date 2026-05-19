@@ -36,26 +36,27 @@ pub fn sel_overlay_name(prefix: &str, i: usize) -> String {
 }
 
 pub struct Editor {
-    pub(crate) id_prefix: Arc<String>,
-    pub(crate) live_x: Shared<f32>,
-    pub(crate) live_y: Shared<f32>,
-    pub(crate) live_w: Shared<f32>,
-    pub(crate) live_h: Shared<f32>,
-    pub(crate) cfg:   Shared<Settings>,
-    pub(crate) code_font:   Arc<Font>,
-    pub(crate) gutter_font: Arc<Font>,
-    pub(crate) theme: Shared<HashMap<String, Color>>,
-    pub(crate) state: Arc<Mutex<EditorState>>,
-    pub(crate) v_scroll: Shared<ScrollAxis>,
-    pub(crate) h_scroll: Shared<ScrollAxis>,
+    pub(crate) id_prefix:      Arc<String>,
+    pub(crate) live_x:         Shared<f32>,
+    pub(crate) live_y:         Shared<f32>,
+    pub(crate) live_w:         Shared<f32>,
+    pub(crate) live_h:         Shared<f32>,
+    pub(crate) cfg:            Shared<Settings>,
+    pub(crate) code_font:      Arc<Font>,
+    pub(crate) gutter_font:    Arc<Font>,
+    pub(crate) theme:          Shared<HashMap<String, Color>>,
+    pub(crate) state:          Arc<Mutex<EditorState>>,
+    pub(crate) v_scroll:       Shared<ScrollAxis>,
+    pub(crate) h_scroll:       Shared<ScrollAxis>,
     pub(crate) max_line_width: Shared<f32>,
     pub(crate) blink_timer:    Shared<f32>,
     pub(crate) idle_timer:     Shared<f32>,
     pub(crate) cursor_vis:     Shared<bool>,
     pub(crate) autosave_timer: Shared<f64>,
     pub(crate) img_loaded_key: Shared<String>,
-    pub(crate) dragging: Shared<bool>,
-    pub(crate) scroll_intent: Shared<f32>,
+    pub(crate) dragging:       Shared<bool>,
+    pub(crate) scroll_intent:  Shared<f32>,
+    pub(crate) focus:          Shared<bool>,
 }
 
 impl Editor {
@@ -100,6 +101,7 @@ impl Editor {
             img_loaded_key: Shared::new(String::new()),
             dragging:       Shared::new(false),
             scroll_intent:  Shared::new(0.0),
+            focus:          Shared::new(true),
         }
     }
 
@@ -120,6 +122,18 @@ impl Editor {
         (*self.live_x.get(), *self.live_y.get(), *self.live_w.get(), *self.live_h.get())
     }
 
+    /// Returns `(row, col)` of the cursor, 0-indexed.
+    /// Non-blocking: returns `(0, 0)` if the state mutex is contended.
+    pub fn cursor_position(&self) -> (usize, usize) {
+        self.state.try_lock()
+            .map(|st| (st.cursor_row, st.cursor_col))
+            .unwrap_or((0, 0))
+    }
+
+    pub fn set_focus(&self, focused: bool) {
+        *self.focus.get_mut() = focused;
+    }
+
     pub fn open_file(&self, file_path: &str) {
         {
             let mut st = self.state.lock().unwrap();
@@ -136,6 +150,7 @@ impl Editor {
         *self.img_loaded_key.get_mut() = String::new();
         *self.dragging.get_mut()       = false;
         *self.scroll_intent.get_mut()  = 0.0;
+        *self.focus.get_mut()          = true;
     }
 
     pub fn apply_settings(&self, new_settings: Settings) {

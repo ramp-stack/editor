@@ -1,7 +1,7 @@
 // editor/state.rs — Core editor document + cursor state.
 
 use crate::components::language::{file_lang, file_mode, FileMode, Lang};
-use crate::components::selection;
+use crate::components::selection::{self, SelectionRange, SelectionState};
 
 pub struct EditorState {
     pub lines:      Vec<String>,
@@ -12,16 +12,14 @@ pub struct EditorState {
     pub mode:       FileMode,
     pub lang:       Lang,
 
-    // Selection anchor (where drag/shift started) and active end.
-    // Both are (row, byte_col).  None = no selection.
-    pub sel_anchor: Option<(usize, usize)>,
-    pub sel_active: Option<(usize, usize)>,
+    /// Unified selection state (char-col indexed).
+    pub sel: SelectionState,
 }
 
 impl EditorState {
-    /// Clamp cursor_col to the length of the current line.
+    /// Clamp cursor_col to the char length of the current line.
     pub fn clamp_col(&mut self) {
-        let max = self.lines[self.cursor_row].len();
+        let max = selection::char_len(&self.lines[self.cursor_row]);
         if self.cursor_col > max {
             self.cursor_col = max;
         }
@@ -49,28 +47,42 @@ impl EditorState {
         self.lines.get(row)?.chars().nth(col - 1)
     }
 
-    // ── Selection helpers (delegate to components::selection) ─────────────────
+    // ── Selection helpers ─────────────────────────────────────────────────────
 
-    pub fn selection(&self) -> Option<((usize, usize), (usize, usize))> {
-        selection::selection(self.sel_anchor, self.sel_active)
+    pub fn selection(&self) -> Option<SelectionRange> {
+        self.sel.range()
     }
 
     pub fn selected_text(&self) -> String {
-        selection::selected_text(&self.lines, self.sel_anchor, self.sel_active)
+        selection::selected_text(&self.lines, self.sel.anchor, self.sel.active)
     }
 
     pub fn clear_selection(&mut self) {
-        self.sel_anchor = None;
-        self.sel_active = None;
+        self.sel.clear();
     }
 
+    /// Plant the anchor and active end at the current cursor position,
+    /// ready to start a new drag/shift selection.
     pub fn anchor_at_cursor(&mut self) {
-        self.sel_anchor = Some((self.cursor_row, self.cursor_col));
-        self.sel_active = Some((self.cursor_row, self.cursor_col));
+        self.sel.begin((self.cursor_row, self.cursor_col));
     }
 
+    /// Stretch the active end of the selection to the current cursor.
     pub fn extend_selection_to_cursor(&mut self) {
-        self.sel_active = Some((self.cursor_row, self.cursor_col));
+        self.sel.extend((self.cursor_row, self.cursor_col));
+    }
+
+    /// Convenience: select all text in the document.
+    pub fn select_all(&mut self) {
+        self.sel.select_all(&self.lines);
+    }
+
+    /// Convenience: select the word under the cursor.
+    pub fn select_word_at_cursor(&mut self) {
+        let row  = self.cursor_row;
+        let col  = self.cursor_col;
+        let line = self.lines[row].clone();
+        self.sel.select_word(row, col, &line);
     }
 }
 
@@ -105,7 +117,6 @@ pub fn load(file_path: &str) -> EditorState {
         path:       file_path.to_string(),
         mode,
         lang,
-        sel_anchor: None,
-        sel_active: None,
+        sel:        SelectionState::new(),
     }
 }

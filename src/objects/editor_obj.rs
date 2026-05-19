@@ -2,7 +2,7 @@ use flowmango::{Canvas, GameObject};
 use quartz::tint_overlay;
 use ramp::prism;
 
-use crate::components::highlight::{build_gutter_slice, build_text_slice};
+use crate::components::highlight::{build_gutter_slice, build_colored_text};
 use crate::components::image_view;
 use crate::components::language::{file_lang, FileMode};
 use crate::constants::RIGHT_PAD;
@@ -49,7 +49,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
         let end = viewport_lines.min(st.lines.len().max(1));
         let lines = if st.lines.is_empty() { vec![String::new()] } else { st.lines[..end].to_vec() };
         (
-            build_text_slice(&lines, &ed.code_font, &cfg, &theme, &file_lang(&init_path)),
+            build_colored_text(&lines, &ed.code_font, &cfg, &theme, &file_lang(&init_path)),
             build_gutter_slice(0, end.max(1), 0, &ed.gutter_font, &cfg, &theme),
         )
     };
@@ -57,7 +57,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     if init_mode == FileMode::Text {
         let st = ed.state.lock().unwrap();
         if let Some(line) = st.lines.iter().max_by_key(|l| l.chars().count()) {
-            let t = build_text_slice(
+            let t = build_colored_text(
                 std::slice::from_ref(line), &ed.code_font, &cfg, &theme, &file_lang(&init_path),
             );
             *ed.max_line_width.get_mut() = t.size().0;

@@ -27,23 +27,22 @@ impl CursorStyle {
                 }}
             }
             CursorStyle::Block => {
-                let border  = 1u32;
-                let fill    = image::Rgba([180, 140, 255,  60]);
-                let outline = image::Rgba([200, 160, 255, 200]);
+                let outline = image::Rgba([220, 220, 220, 220]);
+                let empty   = image::Rgba([0, 0, 0, 0]);
                 for y in 0..ph { for x in 0..pw {
-                    let on_border = x < border || y < border
-                        || x >= pw.saturating_sub(border)
-                        || y >= ph.saturating_sub(border);
-                    img.put_pixel(x, y, if on_border { outline } else { fill });
+                    let on_border = x == 0 || y == 0
+                        || x == pw.saturating_sub(1)
+                        || y == ph.saturating_sub(1);
+                    img.put_pixel(x, y, if on_border { outline } else { empty });
                 }}
             }
             CursorStyle::Underline => {
-                let bar_h     = 3u32;
-                let fill      = image::Rgba([180, 140, 255,  60]);
-                let bar_color = image::Rgba([180, 140, 255, 200]);
+                let bar_h     = 2u32;
+                let bar_start = ph.saturating_sub(bar_h);
+                let bar_color = image::Rgba([220, 220, 220, 255]);
+                let empty     = image::Rgba([0, 0, 0, 0]);
                 for y in 0..ph { for x in 0..pw {
-                    img.put_pixel(x, y,
-                        if y >= ph.saturating_sub(bar_h) { bar_color } else { fill });
+                    img.put_pixel(x, y, if y >= bar_start { bar_color } else { empty });
                 }}
             }
         }

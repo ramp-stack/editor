@@ -6,7 +6,7 @@ use ramp::prism;
 
 use crate::constants::*;
 use crate::components::cursor::{cursor_in_view, cursor_position};
-use crate::components::highlight::{build_gutter_slice, build_text_slice};
+use crate::components::highlight::{build_gutter_slice, build_colored_text};
 use crate::components::image_view;
 use crate::components::language::FileMode;
 use crate::components::scroll::ScrollAxis;
@@ -16,27 +16,27 @@ use crate::editor::ObjNames;
 use crate::editor::{sel_overlay_name, SEL_OVERLAY_COUNT};
 
 pub fn register(cv: &mut Canvas, ed: &Editor) {
-    let cfg_u           = ed.cfg.clone();
-    let theme_u         = ed.theme.clone();
-    let code_font_u     = ed.code_font.clone();
-    let gutter_font_u   = ed.gutter_font.clone();
-    let v_scroll_u      = ed.v_scroll.clone();
-    let h_scroll_u      = ed.h_scroll.clone();
+    let cfg_u            = ed.cfg.clone();
+    let theme_u          = ed.theme.clone();
+    let code_font_u      = ed.code_font.clone();
+    let gutter_font_u    = ed.gutter_font.clone();
+    let v_scroll_u       = ed.v_scroll.clone();
+    let h_scroll_u       = ed.h_scroll.clone();
     let max_line_width_u = ed.max_line_width.clone();
-    let state_u         = ed.state.clone();
-    let blink_timer_u   = ed.blink_timer.clone();
-    let idle_timer_u    = ed.idle_timer.clone();
-    let cursor_vis_u    = ed.cursor_vis.clone();
+    let state_u          = ed.state.clone();
+    let blink_timer_u    = ed.blink_timer.clone();
+    let idle_timer_u     = ed.idle_timer.clone();
+    let cursor_vis_u     = ed.cursor_vis.clone();
     let autosave_timer_u = ed.autosave_timer.clone();
-    let live_x_u        = ed.live_x.clone();
-    let live_y_u        = ed.live_y.clone();
-    let live_w_u        = ed.live_w.clone();
-    let live_h_u        = ed.live_h.clone();
-    let names_u         = ObjNames::from_prefix(&ed.id_prefix);
-    let id_prefix_u     = ed.id_prefix.clone();
+    let live_x_u         = ed.live_x.clone();
+    let live_y_u         = ed.live_y.clone();
+    let live_w_u         = ed.live_w.clone();
+    let live_h_u         = ed.live_h.clone();
+    let names_u          = ObjNames::from_prefix(&ed.id_prefix);
+    let id_prefix_u      = ed.id_prefix.clone();
     let img_loaded_key_u = ed.img_loaded_key.clone();
-    let scroll_intent_u = ed.scroll_intent.clone();
-    let dragging_u      = ed.dragging.clone();
+    let scroll_intent_u  = ed.scroll_intent.clone();
+    let dragging_u       = ed.dragging.clone();
 
     cv.on_update(move |cv| {
         let cfg    = *cfg_u.get();
@@ -102,7 +102,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         if { *max_line_width_u.get() } <= 0.0 {
             let st = state_u.lock().unwrap();
             if let Some(longest) = st.lines.iter().max_by_key(|l| l.chars().count()) {
-                let t = build_text_slice(
+                let t = build_colored_text(
                     std::slice::from_ref(longest), &code_font_u, &cfg, &theme, &cur_lang,
                 );
                 *max_line_width_u.get_mut() = t.size().0;
@@ -128,7 +128,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         let gs = v_scroll_u.get().offset;
         let hs = h_scroll_u.get().offset;
 
-        let first_visible  = (gs / lh).floor() as usize;
+        let first_visible   = (gs / lh).floor() as usize;
         let sub_line_offset = gs - first_visible as f32 * lh;
         let (slice_start, text_top) = if first_visible > 0 {
             (first_visible - 1, code_y - sub_line_offset - lh)
@@ -149,10 +149,10 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                     let row = (((my_c - ey - cfg.text_y + gs) / lh).floor().max(0.0) as usize)
                         .min(st.lines.len().saturating_sub(1));
                     let col = (((mx_c - ex - cfg.text_x + hs) / cw).floor().max(0.0) as usize)
-                        .min(st.lines[row].len());
+                        .min(selection::char_len(&st.lines[row]));
                     st.cursor_row = row;
                     st.cursor_col = col;
-                    st.sel_active = Some((row, col));
+                    st.sel.extend((row, col));
                 }
             }
         }
@@ -160,7 +160,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         {
             let st = state_u.lock().unwrap();
             if last_visible > slice_start {
-                let text = build_text_slice(
+                let text = build_colored_text(
                     &st.lines[slice_start..last_visible], &code_font_u, &cfg, &theme, &cur_lang,
                 );
                 let gutter = build_gutter_slice(
@@ -203,17 +203,17 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         }
 
         {
-            let st      = state_u.lock().unwrap();
+            let st       = state_u.lock().unwrap();
             let overlays = selection::overlay_rects(
-                st.sel_anchor, st.sel_active, &st.lines,
+                st.sel.anchor, st.sel.active, &st.lines,
                 slice_start, visible_lines,
                 text_top, code_x, hs, cw, lh, cw * 0.5,
             );
 
             for i in 0..SEL_OVERLAY_COUNT {
-                let name        = sel_overlay_name(&id_prefix_u, i);
-                let Some(o)     = cv.get_game_object_mut(&name) else { continue };
-                let Some(ovr)   = overlays.iter().find(|v| v.abs_row == slice_start + i) else {
+                let name      = sel_overlay_name(&id_prefix_u, i);
+                let Some(o)   = cv.get_game_object_mut(&name) else { continue };
+                let Some(ovr) = overlays.iter().find(|v| v.abs_row == slice_start + i) else {
                     o.visible = false;
                     continue;
                 };
