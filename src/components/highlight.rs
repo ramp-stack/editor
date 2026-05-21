@@ -1,10 +1,9 @@
-use crate::components::language::Lang;
 use crate::preferences::Settings;
 use quartz::{Align, Color, Font, Span, Text};
 use serde_json::from_slice;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tree_sitter::{InputEdit, Language, Parser, Point};
+use tree_sitter::Parser;
 
 const FALLBACK: Color = Color(200, 200, 200, 255);
 
@@ -75,7 +74,6 @@ pub fn build_colored_text(
     font: &Arc<Font>,
     cfg: &Settings,
     theme: &HashMap<String, Color>,
-    lang: &Lang,
 ) -> Text {
     let mut parser = Parser::new();
     parser
@@ -242,3 +240,4 @@ pub fn build_gutter_slice(
     }
     Text::new(spans, None, Align::Right, None)
 }
+
