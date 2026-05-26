@@ -6,3 +6,4 @@ pub mod language;
 pub mod scroll;
 pub mod selection;
 pub mod theme;
+pub mod minimap;

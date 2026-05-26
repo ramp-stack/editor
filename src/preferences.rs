@@ -74,21 +74,21 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             font_size:                13.0,
-            line_height_mul:          1.55,
+            line_height_mul:          1.65,
             char_width_mul:           0.601,
-            text_x:                   48.0,
-            text_y:                   20.0,
-            gutter_w:                 48.0,
+            gutter_w:                 56.0,
+            text_x:                   72.0,
+            text_y:                   12.0,
             backspace_deletes_before: true,
             cursor_style:             CursorStyle::Underline,
             cursor_blink:             true,
             auto_pairs:               true,
-            border_color:             (55, 55, 55, 255),
+            border_color:             (36, 40, 59, 255),
             border_thickness:         1.0,
             border_padding:           8.0,
-            scroll_accel:             5.5,
-            scroll_friction:          0.10,
-            scroll_max:               90.0,
+            scroll_accel:             8.0,
+            scroll_friction:          0.12,
+            scroll_max:               120.0,
         }
     }
 }

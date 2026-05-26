@@ -57,6 +57,7 @@ pub struct Editor {
     pub(crate) dragging:       Shared<bool>,
     pub(crate) scroll_intent:  Shared<f32>,
     pub(crate) focus:          Shared<bool>,
+    pub(crate) sb_dragging:    Shared<bool>,
 }
 
 impl Editor {
@@ -102,6 +103,7 @@ impl Editor {
             dragging:       Shared::new(false),
             scroll_intent:  Shared::new(0.0),
             focus:          Shared::new(true),
+            sb_dragging:    Shared::new(false),
         }
     }
 
@@ -122,8 +124,6 @@ impl Editor {
         (*self.live_x.get(), *self.live_y.get(), *self.live_w.get(), *self.live_h.get())
     }
 
-    /// Returns `(row, col)` of the cursor, 0-indexed.
-    /// Non-blocking: returns `(0, 0)` if the state mutex is contended.
     pub fn cursor_position(&self) -> (usize, usize) {
         self.state.try_lock()
             .map(|st| (st.cursor_row, st.cursor_col))
@@ -151,6 +151,7 @@ impl Editor {
         *self.dragging.get_mut()       = false;
         *self.scroll_intent.get_mut()  = 0.0;
         *self.focus.get_mut()          = true;
+        *self.sb_dragging.get_mut()    = false;
     }
 
     pub fn apply_settings(&self, new_settings: Settings) {

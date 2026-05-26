@@ -2,10 +2,12 @@ use flowmango::Canvas;
 use quartz::{Key, MouseButton, NamedKey};
 
 use crate::components::auto_pairs;
+use crate::components::minimap::MINIMAP_W;
 use crate::components::scroll::ScrollAxis;
 use crate::components::selection;
 use crate::constants::RIGHT_PAD;
 use crate::editor::Editor;
+use crate::objects::editor_obj::SCROLLBAR_W;
 
 fn mouse_col(mx: f32, ex: f32, text_x: f32, hs: f32, cw: f32, line: &str) -> usize {
     let char_count = selection::char_len(line);
@@ -33,6 +35,93 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
     register_mouse_move(cv, ed);
     register_mouse_release(cv, ed);
     register_mouse_scroll(cv, ed);
+    register_scrollbar(cv, ed);
+}
+
+fn register_scrollbar(cv: &mut Canvas, ed: &Editor) {
+    let v_scroll_sb   = ed.v_scroll.clone();
+    let cfg_sb        = ed.cfg.clone();
+    let live_x_sb     = ed.live_x.clone();
+    let live_y_sb     = ed.live_y.clone();
+    let live_w_sb     = ed.live_w.clone();
+    let live_h_sb     = ed.live_h.clone();
+    let state_sb      = ed.state.clone();
+    let sb_dragging   = quartz::Shared::new(false);
+    let sb_drag_off   = quartz::Shared::new(0.0f32);
+    let sb_dragging_m = sb_dragging.clone();
+    let sb_drag_off_m = sb_drag_off.clone();
+    let sb_dragging_r = sb_dragging.clone();
+
+    let v_scroll_sb_m = ed.v_scroll.clone();
+    let cfg_sb_m      = ed.cfg.clone();
+    let live_x_sb_m   = ed.live_x.clone();
+    let live_y_sb_m   = ed.live_y.clone();
+    let live_w_sb_m   = ed.live_w.clone();
+    let live_h_sb_m   = ed.live_h.clone();
+    let state_sb_m    = ed.state.clone();
+
+    cv.on_mouse_press(move |_cv, button, (mx, my)| {
+        if button != MouseButton::Left { return; }
+        let ex   = { *live_x_sb.get() };
+        let ew   = { *live_w_sb.get() };
+        let ey   = { *live_y_sb.get() };
+        let eh   = { *live_h_sb.get() };
+        let sb_x = ex + ew - SCROLLBAR_W;
+
+        if mx < sb_x || mx > sb_x + SCROLLBAR_W { return; }
+        if my < ey   || my > ey + eh             { return; }
+
+        let cfg        = *cfg_sb.get();
+        let total      = { state_sb.lock().unwrap().lines.len().max(1) };
+        let viewport_h = (eh - cfg.text_y).max(0.0);
+        let lh         = cfg.line_height();
+        let v_max      = (total as f32 * lh - viewport_h).max(0.0);
+        let gs         = { v_scroll_sb.get().offset };
+        let track_h    = eh;
+        let thumb_h    = if v_max > 0.0 {
+            (viewport_h / (viewport_h + v_max) * track_h).max(20.0).min(track_h)
+        } else { track_h };
+        let thumb_top  = if v_max > 0.0 {
+            ey + (gs / v_max) * (track_h - thumb_h)
+        } else { ey };
+
+        if my >= thumb_top && my <= thumb_top + thumb_h {
+            *sb_dragging.get_mut() = true;
+            *sb_drag_off.get_mut() = my - thumb_top;
+        } else {
+            let center_off = my - ey - thumb_h * 0.5;
+            let target_off = (center_off / (track_h - thumb_h)).clamp(0.0, 1.0) * v_max;
+            v_scroll_sb.get_mut().jump_to(target_off, v_max);
+            *sb_dragging.get_mut() = true;
+            *sb_drag_off.get_mut() = thumb_h * 0.5;
+        }
+    });
+
+    cv.on_mouse_move(move |_cv, (_mx, my)| {
+        if !{ *sb_dragging_m.get() } { return; }
+        let ey      = { *live_y_sb_m.get() };
+        let eh      = { *live_h_sb_m.get() };
+        let cfg     = *cfg_sb_m.get();
+        let total   = { state_sb_m.lock().unwrap().lines.len().max(1) };
+        let vp_h    = (eh - cfg.text_y).max(0.0);
+        let lh      = cfg.line_height();
+        let v_max   = (total as f32 * lh - vp_h).max(0.0);
+        let track_h = eh;
+        let thumb_h = if v_max > 0.0 {
+            (vp_h / (vp_h + v_max) * track_h).max(20.0).min(track_h)
+        } else { track_h };
+        let drag_off   = { *sb_drag_off_m.get() };
+        let thumb_top  = (my - ey - drag_off).clamp(0.0, track_h - thumb_h);
+        let target_off = if track_h - thumb_h > 0.0 {
+            (thumb_top / (track_h - thumb_h)) * v_max
+        } else { 0.0 };
+        v_scroll_sb_m.get_mut().jump_to(target_off, v_max);
+    });
+
+    cv.on_mouse_release(move |_cv, button, _pos| {
+        if button != MouseButton::Left { return; }
+        *sb_dragging_r.get_mut() = false;
+    });
 }
 
 fn register_keys(cv: &mut Canvas, ed: &Editor) {
@@ -77,7 +166,6 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
             return;
         }
 
-        let mut changed = true;
         match key {
             Key::Named(NamedKey::ArrowUp) => {
                 if shift {
@@ -86,7 +174,7 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     st.extend_selection_to_cursor();
                 } else {
                     st.clear_selection();
-                    if st.cursor_row > 0 { st.cursor_row -= 1; st.clamp_col(); } else { changed = false; }
+                    if st.cursor_row > 0 { st.cursor_row -= 1; st.clamp_col(); }
                 }
                 let gs        = v_scroll_k.get().offset;
                 let lh        = cfg.line_height();
@@ -100,7 +188,7 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     st.extend_selection_to_cursor();
                 } else {
                     st.clear_selection();
-                    if st.cursor_row + 1 < st.lines.len() { st.cursor_row += 1; st.clamp_col(); } else { changed = false; }
+                    if st.cursor_row + 1 < st.lines.len() { st.cursor_row += 1; st.clamp_col(); }
                 }
                 let gs       = v_scroll_k.get().offset;
                 let lh       = cfg.line_height();
@@ -123,7 +211,7 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     else if st.cursor_row > 0 {
                         st.cursor_row -= 1;
                         st.cursor_col = selection::char_len(&st.lines[st.cursor_row]);
-                    } else { changed = false; }
+                    }
                 }
             }
             Key::Named(NamedKey::ArrowRight) => {
@@ -139,7 +227,6 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     let row = st.cursor_row;
                     if st.cursor_col < selection::char_len(&st.lines[row]) { st.cursor_col += 1; }
                     else if st.cursor_row + 1 < st.lines.len() { st.cursor_row += 1; st.cursor_col = 0; }
-                    else { changed = false; }
                 }
             }
             Key::Named(NamedKey::Home) => {
@@ -162,13 +249,17 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                 }
             }
             Key::Named(NamedKey::Space) => {
-                *scroll_intent_k.get_mut() = 0.0; st.clear_selection();
+                *scroll_intent_k.get_mut() = 0.0;
+                st.clear_selection();
                 let (row, col) = (st.cursor_row, st.cursor_col);
                 let byte = selection::char_col_to_byte_col(&st.lines[row], col);
-                st.lines[row].insert(byte, ' '); st.cursor_col += 1; st.dirty = true;
+                st.lines[row].insert(byte, ' ');
+                st.cursor_col += 1;
+                st.bump();
             }
             Key::Named(NamedKey::Enter) => {
-                *scroll_intent_k.get_mut() = 0.0; st.clear_selection();
+                *scroll_intent_k.get_mut() = 0.0;
+                st.clear_selection();
                 let (row, col)  = (st.cursor_row, st.cursor_col);
                 let byte        = selection::char_col_to_byte_col(&st.lines[row], col);
                 let rest        = st.lines[row].split_off(byte);
@@ -188,7 +279,7 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     st.lines.insert(row + 1, " ".repeat(indent) + &rest);
                     st.cursor_row += 1; st.cursor_col = indent;
                 }
-                st.dirty = true;
+                st.bump();
             }
             Key::Named(NamedKey::Delete) | Key::Named(NamedKey::Backspace) => {
                 *scroll_intent_k.get_mut() = 0.0;
@@ -213,7 +304,8 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                             let byte_prev = selection::char_col_to_byte_col(&st.lines[row], col - 1);
                             st.lines[row].remove(byte_next);
                             st.lines[row].remove(byte_prev);
-                            st.cursor_col -= 1; st.dirty = true;
+                            st.cursor_col -= 1;
+                            st.bump();
                             return;
                         }
                     }
@@ -221,21 +313,26 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                         let byte = selection::char_col_to_byte_col(&st.lines[row], col - 1);
                         st.lines[row].remove(byte);
                         st.cursor_col -= 1;
+                        st.bump();
                     } else if row > 0 {
-                        let cur = st.lines.remove(row); st.cursor_row -= 1;
-                        let nr  = st.cursor_row;
+                        let cur = st.lines.remove(row);
+                        st.cursor_row -= 1;
+                        let nr = st.cursor_row;
                         st.cursor_col = selection::char_len(&st.lines[nr]);
                         st.lines[nr].push_str(&cur);
-                    } else { changed = false; }
+                        st.bump();
+                    }
                 } else {
                     if col < selection::char_len(&st.lines[row]) {
                         let byte = selection::char_col_to_byte_col(&st.lines[row], col);
                         st.lines[row].remove(byte);
+                        st.bump();
                     } else if row + 1 < st.lines.len() {
-                        let n = st.lines.remove(row + 1); st.lines[row].push_str(&n);
-                    } else { changed = false; }
+                        let n = st.lines.remove(row + 1);
+                        st.lines[row].push_str(&n);
+                        st.bump();
+                    }
                 }
-                if changed { st.dirty = true; }
             }
             Key::Named(NamedKey::Tab) => {
                 *scroll_intent_k.get_mut() = 0.0;
@@ -243,7 +340,9 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                 else { st.clear_selection(); }
                 let (row, col) = (st.cursor_row, st.cursor_col);
                 let byte = selection::char_col_to_byte_col(&st.lines[row], col);
-                st.lines[row].insert_str(byte, "    "); st.cursor_col += 4; st.dirty = true;
+                st.lines[row].insert_str(byte, "    ");
+                st.cursor_col += 4;
+                st.bump();
             }
             Key::Character(ch) if ch.len() == 1 => {
                 *scroll_intent_k.get_mut() = 0.0;
@@ -256,19 +355,19 @@ fn register_keys(cv: &mut Canvas, ed: &Editor) {
                     st.cursor_col += 1;
                 } else {
                     let byte = selection::char_col_to_byte_col(&st.lines[row], col);
-                    st.lines[row].insert(byte, c); st.cursor_col += 1;
+                    st.lines[row].insert(byte, c);
+                    st.cursor_col += 1;
                     if auto_pairs_on {
                         if let Some(close) = auto_pairs::pair_close(c) {
                             let new_byte = selection::char_col_to_byte_col(&st.lines[row], st.cursor_col);
                             st.lines[row].insert(new_byte, close);
                         }
                     }
-                    st.dirty = true;
+                    st.bump();
                 }
             }
-            _ => { changed = false; }
+            _ => {}
         }
-        let _ = changed;
     });
 }
 
@@ -287,7 +386,8 @@ fn handle_ctrl_key(key: &Key, shift: bool, st: &mut crate::editor::state::Editor
                     let pos = line.find("//").unwrap();
                     st.lines[row].replace_range(pos..pos + 2, "");
                 } else { st.lines[row].insert_str(0, "//"); }
-                st.dirty = true; st.clear_selection();
+                st.bump();
+                st.clear_selection();
             }
             _ => {}
         }
@@ -324,6 +424,9 @@ fn register_mouse_press(cv: &mut Canvas, ed: &Editor) {
             *focus_m.get_mut() = false;
             return;
         }
+
+        let mmx = ex + ew - MINIMAP_W;
+        if mx >= mmx { return; }
 
         *focus_m.get_mut()      = true;
         *idle_m.get_mut()       = 0.0;
@@ -475,5 +578,5 @@ fn delete_selection(st: &mut crate::editor::state::EditorState) {
     st.cursor_row = r1;
     st.cursor_col = c1;
     st.sel.clear();
-    st.dirty = true;
+    st.bump();
 }
