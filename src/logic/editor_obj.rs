@@ -478,6 +478,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
     let parser = Arc::new(AsyncParser::new());
 
     cv.on_update(move |cv| {
+        let frame_start = std::time::Instant::now();
         let cfg = *cfg_u.get();
         let theme = theme_u.get().clone();
         let lh = cfg.line_height();
@@ -938,6 +939,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 o.visible = true;
             }
         }
+        println!("frame: {:?}", frame_start.elapsed());
     });
 }
 
