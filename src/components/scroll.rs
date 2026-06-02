@@ -6,29 +6,17 @@ pub struct ScrollAxis {
 
 impl ScrollAxis {
     pub fn push(&mut self, delta: f32, max_speed: f32) {
-        let new = self.velocity + delta;
-        self.velocity = new.clamp(-max_speed, max_speed);
+        self.offset = self.offset + delta;
     }
 
     pub fn set_intent(&mut self, vel: f32) {
         self.velocity = vel;
     }
 
-    pub fn tick(&mut self, friction: f32, max_offset: f32) -> bool {
-        if self.velocity.abs() <= 0.1 {
-            self.velocity = 0.0;
-            return false;
-        }
-
-        let prev   = self.offset;
-        self.offset = (self.offset + self.velocity).clamp(0.0, max_offset);
-
-        if self.offset <= 0.0 || self.offset >= max_offset {
-            self.velocity = 0.0;
-        } else {
-            self.velocity *= friction;
-        }
-
+    pub fn tick(&mut self, _friction: f32, max_offset: f32) -> bool {
+        let prev    = self.offset;
+        self.offset = self.offset.clamp(0.0, max_offset);
+        self.velocity = 0.0;
         (self.offset - prev).abs() > 0.01
     }
 

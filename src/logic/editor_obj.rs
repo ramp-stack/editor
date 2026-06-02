@@ -184,7 +184,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
 
     cv.add_game_object(names.gutter_bg.clone(), {
         let mut o = GameObject::build(&names.gutter_bg)
-            .position(ex, ey).size(cfg.gutter_w, eh).layer(2)
+            .position(ex, ey).size(cfg.gutter_w, eh).layer(8)
             .image(tint_overlay(4000.0, 4000.0, theme.get("gutter_bg").copied().unwrap()))
             .finish();
         o.visible = init_mode == FileMode::Text;
@@ -193,8 +193,8 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
 
     {
         let mut o = GameObject::build(&names.gutter)
-            .position(ex, code_y).size(4000.0, 4000.0).layer(3)
-            .clip().clip_origin(ex, ey).clip_size(ex + cfg.gutter_w, ey + eh).finish();
+            .position(ex, code_y).size(4000.0, 4000.0).layer(9)
+            .clip().clip_origin(ex, ey).clip_size(cfg.gutter_w, eh).finish();
         o.set_drawable(Box::new(init_gutter));
         o.visible = init_mode == FileMode::Text;
         cv.add_game_object(names.gutter.clone(), o);
@@ -205,8 +205,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
         let mut o = GameObject::build(&name)
             .position(code_x, code_y + i as f32 * lh).size(1.0, lh).layer(2)
             .image(tint_overlay(1.0, lh.max(1.0), quartz::Color(38, 79, 120, 180)))
-            // Clip selections to the code area only (not gutter, not minimap)
-            .clip().clip_origin(code_x, ey).clip_size(code_x + code_w, ey + eh).finish();
+            .clip().clip_origin(code_x, ey).clip_size(mmx - code_x, eh).finish();
         o.visible = false;
         cv.add_game_object(name, o);
     }
@@ -216,7 +215,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
             .position(code_x, code_y).size(4000.0, 4000.0).layer(1)
             // Clip starts at code_x (after gutter) so horizontal scroll
             // never reveals text bleeding under the gutter on the left.
-            .clip().clip_origin(code_x, ey).clip_size(code_x + code_w, ey + eh).finish();
+            .clip().clip_origin(code_x, ey).clip_size(mmx - code_x, eh).finish();
         o.set_drawable(Box::new(init_text));
         o.visible = init_mode == FileMode::Text;
         cv.add_game_object(names.code_text.clone(), o);
@@ -225,7 +224,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     {
         let (cur_w, cur_h, _) = cfg.cursor_size();
         let mut o = GameObject::build(&names.cursor)
-            .position(code_x, code_y).size(cur_w, cur_h).layer(4).pivot(0.0, 0.0)
+            .position(code_x, code_y).size(cur_w, cur_h).layer(5).pivot(0.0, 0.0)
             .image(prism::canvas::Image {
                 shape: prism::canvas::ShapeType::Rectangle(0.0, (cur_w, cur_h), 0.0),
                 image: cfg.cursor_style.build_image(cur_w, cur_h).into(),
@@ -239,9 +238,10 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     {
         let bg_c  = theme.get("gutter_bg").copied().unwrap_or(quartz::Color(13, 14, 20, 255));
         let bname = minimap_bg_name(&ed.id_prefix);
+        // Use solid_rect (fully opaque) so text never bleeds through
         let mut o = GameObject::build(&bname)
-            .position(mmx, ey).size(MINIMAP_W, eh).layer(2)
-            .image(tint_overlay(MINIMAP_W, eh, bg_c))
+            .position(mmx, ey).size(MINIMAP_W, eh).layer(8)
+            .image(solid_rect(MINIMAP_W, eh, quartz::Color(bg_c.0, bg_c.1, bg_c.2, 255)))
             .finish();
         o.visible = init_mode == FileMode::Text;
         cv.add_game_object(bname, o);
@@ -249,7 +249,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
 
     {
         let vname = format!("{}_mm_viewport", &ed.id_prefix);
-        let mut o = GameObject::build(&vname).position(mmx, ey).size(MINIMAP_W, 20.0).layer(5).finish();
+        let mut o = GameObject::build(&vname).position(mmx, ey).size(MINIMAP_W, 20.0).layer(10).finish();
         o.set_image(outline_rect(MINIMAP_W, 20.0, quartz::Color(150, 170, 220, 120), false));
         o.visible = false;
         cv.add_game_object(vname, o);
@@ -260,7 +260,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
         let mut o = GameObject::build(&lname)
             .position(mmx + MINIMAP_PAD_X, ey + i as f32 * MINIMAP_LH)
             .size(MINIMAP_W - MINIMAP_PAD_X, MINIMAP_LH)
-            .layer(3).clip().clip_origin(mmx, ey).clip_size(mmx + MINIMAP_W, ey + eh).finish();
+            .layer(9).clip().clip_origin(mmx, ey).clip_size(MINIMAP_W, eh).finish();
         o.visible = false;
         cv.add_game_object(lname, o);
     }
@@ -268,7 +268,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     {
         let tname = scrollbar_track_name(&ed.id_prefix);
         let mut o = GameObject::build(&tname)
-            .position(sb_x, ey).size(SCROLLBAR_W, eh).layer(6)
+            .position(sb_x, ey).size(SCROLLBAR_W, eh).layer(11)
             .image(solid_rect(SCROLLBAR_W, eh, quartz::Color(30, 31, 40, 180)))
             .finish();
         o.visible = init_mode == FileMode::Text;
@@ -278,7 +278,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     {
         let thname = scrollbar_thumb_name(&ed.id_prefix);
         let mut o  = GameObject::build(&thname)
-            .position(sb_x, ey).size(SCROLLBAR_W, 40.0).layer(7)
+            .position(sb_x, ey).size(SCROLLBAR_W, 40.0).layer(12)
             .image(solid_rect(SCROLLBAR_W, 40.0, quartz::Color(80, 90, 120, 200)))
             .finish();
         o.visible = false;
@@ -502,15 +502,11 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             r.last_rendered_version = ready_ver;
         }
         if let Some(o) = cv.get_game_object_mut(&names_u.code_text) {
-            o.position = (code_x - hs, text_top);
-            // ── CLIP FIX ──────────────────────────────────────────────────────
-            // Clip origin must be code_x (after the gutter), NOT ex.
-            // Using ex allowed scrolled text to bleed under the gutter and
-            // made the right-side clip boundary too wide, causing text to
-            // appear cut off as h_scroll increased.
-            o.set_clip_origin(Some((code_x, ey)));
-            o.set_clip_size(Some((code_x + code_w, ey + eh)));
-            o.visible = true;
+            o.position  = (code_x - hs, text_top);
+            o._origin   = Some((code_x, ey));
+            o._size     = Some((mmx - code_x + hs, eh));
+            o.ped       = true;
+            o.visible   = true;
         }
 
         let gutter_moved = sn.gutter_start != slice_start || sn.gutter_end != last_visible || sn.gutter_row != cur_row;
@@ -526,9 +522,10 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         }
         if let Some(o) = cv.get_game_object_mut(&names_u.gutter) {
             o.position = (ex, text_top);
-            o.set_clip_origin(Some((ex, ey)));
-            o.set_clip_size(Some((ex + cfg.gutter_w, ey + eh)));
-            o.visible = true;
+            o._origin  = Some((ex, ey));
+            o._size    = Some((cfg.gutter_w, eh));
+            o.ped      = true;
+            o.visible  = true;
         }
         if let Some(o) = cv.get_game_object_mut(&names_u.gutter_bg) { o.visible = true; }
 
@@ -549,8 +546,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                         }
                         o.position = (ovr.x_start, ovr.y);
                         o.size     = (ovr.width, lh);
-                        o.set_clip_origin(Some((code_x, ey)));
-                        o.set_clip_size(Some((code_x + code_w, ey + eh)));
+
                         o.visible  = true;
                     }
                 }
@@ -648,9 +644,14 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 } else {
                     None
                 };
-                o.position = (mmx + MINIMAP_PAD_X, ey + slot as f32 * MINIMAP_LH - sub_off);
-                o.set_clip_origin(Some((mmx, ey)));
-                o.set_clip_size(Some((mmx + MINIMAP_W, ey + eh)));
+                let obj_y = ey + slot as f32 * MINIMAP_LH - sub_off;
+                o.position = (mmx + MINIMAP_PAD_X, obj_y);
+                // Fix clip: poffset.y = obj_y, so _size.h must compensate
+                // for sub_off to keep the clip bottom at ey+eh.
+                o._origin  = Some((mmx, ey));
+                o._size    = Some((MINIMAP_W, eh + sub_off));
+                o.ped      = true;
+
                 if let Some(text) = maybe_text {
                     o.set_drawable(Box::new(text));
                 }
@@ -658,7 +659,13 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
             }
 
             if let Some(o) = cv.get_game_object_mut(&minimap_bg_name(&id_prefix_u)) {
-                o.position = (mmx, ey); o.size = (MINIMAP_W, eh); o.visible = true;
+                o.position = (mmx, ey);
+                o.size = (MINIMAP_W, eh);
+                // Rebuild as fully opaque each frame so text can never bleed through
+                let bg_c = theme_u.get().get("gutter_bg")
+                    .copied().unwrap_or(quartz::Color(13, 14, 20, 255));
+                o.set_image(solid_rect(MINIMAP_W, eh, quartz::Color(bg_c.0, bg_c.1, bg_c.2, 255)));
+                o.visible = true;
             }
 
             let vname      = format!("{}_mm_viewport", &*id_prefix_u);

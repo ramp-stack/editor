@@ -527,27 +527,40 @@ fn register_mouse_scroll(cv: &mut Canvas, ed: &Editor) {
     let h_scroll_s       = ed.h_scroll.clone();
     let max_line_width_s = ed.max_line_width.clone();
     let cfg_s            = ed.cfg.clone();
-    let live_x_s = ed.live_x.clone(); let live_y_s = ed.live_y.clone();
-    let live_w_s = ed.live_w.clone(); let live_h_s = ed.live_h.clone();
+    // Read live dimensions inside the closure so they always reflect the
+    // current editor size after any resize — NOT captured at registration time.
+    let live_x_s = ed.live_x.clone();
+    let live_y_s = ed.live_y.clone();
+    let live_w_s = ed.live_w.clone();
+    let live_h_s = ed.live_h.clone();
 
     cv.on_mouse_scroll(move |cv, (dx, dy)| {
         if let Some((mx, my)) = cv.mouse_position() {
-            let ex = { *live_x_s.get() }; let ey = { *live_y_s.get() };
-            let ew = { *live_w_s.get() }; let eh = { *live_h_s.get() };
+            // Read live bounds each invocation — never stale after resize
+            let ex = { *live_x_s.get() };
+            let ey = { *live_y_s.get() };
+            let ew = { *live_w_s.get() };
+            let eh = { *live_h_s.get() };
             if mx < ex || mx > ex + ew || my < ey || my > ey + eh { return; }
         } else { return; }
 
         let cfg = *cfg_s.get();
 
+        // Scale factor for responsive scroll feel.
+        // scroll_accel from cfg can be <1 which makes scroll sluggish.
+        // Use a minimum of 1.0 so each wheel notch moves at least scroll_max pixels.
+        let accel = cfg.scroll_accel.max(1.0);
+
         if dy != 0.0 {
             let dir  = dy.signum();
-            let push = (dy.abs() * cfg.scroll_accel).min(cfg.scroll_max);
+            let push = (dy.abs() * accel).min(cfg.scroll_max);
             v_scroll_s.get_mut().push(dir * push, cfg.scroll_max);
         }
         if dx != 0.0 {
-            let dir    = dx.signum();
-            let push   = (dx.abs() * cfg.scroll_accel).min(cfg.scroll_max);
-            let code_w = { *live_w_s.get() } - cfg.text_x - RIGHT_PAD;
+            let dir  = dx.signum();
+            let push = (dx.abs() * accel).min(cfg.scroll_max);
+            let ew     = { *live_w_s.get() };
+            let code_w = ew - cfg.text_x - RIGHT_PAD - MINIMAP_W;
             let h_max  = ({ *max_line_width_s.get() } - code_w).max(0.0);
             let ax     = h_scroll_s.get();
             if (ax.offset <= 0.0 && dir < 0.0) || (h_max > 0.0 && ax.offset >= h_max && dir > 0.0) {
