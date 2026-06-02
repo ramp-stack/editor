@@ -147,7 +147,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &None,
+                &init_cache,
                 0,
             ),
             build_gutter_slice(0, end.max(1), 0, &ed.gutter_font, &cfg, &theme),
@@ -163,7 +163,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &None,
+                &init_cache,
                 0,
             );
             *ed.max_line_width.get_mut() = t.size().0;
@@ -324,4 +324,3 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
         cv.add_game_object(thname, o);
     }
 }
-

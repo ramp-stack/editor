@@ -245,7 +245,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &None,
+                &init_cache,
                 0,
             ),
             build_gutter_slice(0, end.max(1), 0, &ed.gutter_font, &cfg, &theme),
@@ -678,7 +678,7 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &cur_lang,
-                &None,
+                &cache,
                 slice_start,
             );
             drop(st);
@@ -861,16 +861,20 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
 
             if new_parse_ready || mm_moved || sn.mm_texts_empty {
                 let st = state_u.lock().unwrap();
-                let built = minimap::build_minimap_texts(
-                    &st.lines[first_mm..last_mm],
-                    &theme,
-                    &code_font_u,
-                );
-                drop(st);
-                let mut r = rs.get_mut();
-                r.mm_texts = built;
-                r.mm_first = first_mm;
-                r.mm_last = last_mm;
+                let cache = parser.borrow();
+                if let Some(cache) = &*cache {
+                    let built = minimap::build_minimap_texts(
+                        &st.lines[first_mm..last_mm],
+                        cache,
+                        &theme,
+                        &code_font_u,
+                    );
+                    drop(st);
+                    let mut r = rs.get_mut();
+                    r.mm_texts = built;
+                    r.mm_first = first_mm;
+                    r.mm_last = last_mm;
+                }
             }
 
             let mm_texts_len = rs.get().mm_texts.len();
@@ -942,4 +946,3 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         println!("frame: {:?}", frame_start.elapsed());
     });
 }
-

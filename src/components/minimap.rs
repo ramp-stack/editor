@@ -1,8 +1,7 @@
 use quartz::{Align, Arc, Color, Font, Span, Text};
 use std::collections::HashMap;
-use tree_sitter::Parser;
 
-use crate::preferences::Settings;
+use crate::components::highlight::ParseCache;
 
 pub const MINIMAP_W: f32 = 110.0;
 pub const MINIMAP_FS: f32 = 2.5;
@@ -13,69 +12,65 @@ fn get(theme: &HashMap<String, Color>, key: &str) -> Color {
     theme.get(key).copied().unwrap_or(Color(192, 202, 245, 255))
 }
 
-fn build_color_map(source: &str, theme: &HashMap<String, Color>) -> Vec<Color> {
+fn build_color_map(cache: &ParseCache, theme: &HashMap<String, Color>) -> Vec<Color> {
     let def_c = get(theme, "default");
-    let src_len = source.len();
+    let src_len = cache.source.len();
     let mut map: Vec<Color> = vec![def_c; src_len + 1];
 
-    // let mut parser = Parser::new();
-    // if parser.set_language(&tree_sitter_rust::LANGUAGE.into()).is_err() {
-    //     return map;
-    // }
-    // let tree = match parser.parse(source, None) {
-    //     Some(t) => t,
-    //     None    => return map,
-    // };
-    // let mut tc = tree.walk();
-    //
-    // 'outer: loop {
-    //     if tc.goto_first_child() {
-    //         continue;
-    //     }
-    //
-    //     let node = tc.node();
-    //     let sb   = node.start_byte();
-    //     let eb   = node.end_byte().min(src_len);
-    //
-    //     if matches!(node.kind(), "#") {
-    //         if let Some(parent) = node.parent() {
-    //             let c = get(theme, "attribute_item");
-    //             for i in parent.start_byte()..parent.end_byte().min(src_len) {
-    //                 map[i] = c;
-    //             }
-    //             tc.goto_parent();
-    //         }
-    //     } else if matches!(node.kind(), "//" | "/*") {
-    //         if let Some(parent) = node.parent() {
-    //             let c = get(theme, "line_comment");
-    //             for i in parent.start_byte()..parent.end_byte().min(src_len) {
-    //                 map[i] = c;
-    //             }
-    //             if node.kind() == "/*" {
-    //                 tc.goto_parent();
-    //             }
-    //         }
-    //     } else {
-    //         let theme_key = if node.parent().map(|p| p.kind()) == Some("function_item")
-    //             && node.kind() == "identifier"
-    //             && tc.field_name() == Some("name")
-    //         {
-    //             "function_name"
-    //         } else {
-    //             node.kind()
-    //         };
-    //         let c = theme.get(theme_key).copied().unwrap_or(def_c);
-    //         for i in sb..eb {
-    //             map[i] = c;
-    //         }
-    //     }
-    //
-    //     loop {
-    //         if tc.goto_next_sibling() { break; }
-    //         if !tc.goto_parent()      { break 'outer; }
-    //     }
-    // }
-    //
+    let mut tree_cursor = cache.tree.walk();
+
+    'outer: loop {
+        if tree_cursor.goto_first_child() {
+            continue;
+        }
+
+        let node = tree_cursor.node();
+        let sb = node.start_byte();
+        let eb = node.end_byte().min(src_len);
+
+        if matches!(node.kind(), "#") {
+            if let Some(parent) = node.parent() {
+                let c = get(theme, "attribute_item");
+                for i in parent.start_byte()..parent.end_byte().min(src_len) {
+                    map[i] = c;
+                }
+                tree_cursor.goto_parent();
+            }
+        } else if matches!(node.kind(), "//" | "/*") {
+            if let Some(parent) = node.parent() {
+                let c = get(theme, "line_comment");
+                for i in parent.start_byte()..parent.end_byte().min(src_len) {
+                    map[i] = c;
+                }
+                if node.kind() == "/*" {
+                    tree_cursor.goto_parent();
+                }
+            }
+        } else {
+            let theme_key = if node.parent().map(|p| p.kind()) == Some("function_item")
+                && node.kind() == "identifier"
+                && tree_cursor.field_name() == Some("name")
+            {
+                "function_name"
+            } else {
+                node.kind()
+            };
+            let c = theme.get(theme_key).copied().unwrap_or(def_c);
+            for i in sb..eb {
+                map[i] = c;
+            }
+        }
+
+        loop {
+            if tree_cursor.goto_next_sibling() {
+                break;
+            }
+            if !tree_cursor.goto_parent() {
+                break 'outer;
+            }
+        }
+    }
+
     map
 }
 
@@ -142,11 +137,11 @@ fn line_to_text(line: &str, line_byte_start: usize, color_map: &[Color], font: &
 
 pub fn build_minimap_texts(
     lines: &[String],
+    cache: &ParseCache,
     theme: &HashMap<String, Color>,
     font: &Arc<Font>,
 ) -> Vec<Text> {
-    let source = lines.join("\n");
-    let color_map = build_color_map(&source, theme);
+    let color_map = build_color_map(cache, theme);
 
     let mut texts = Vec::with_capacity(lines.len());
     let mut byte_off = 0usize;
@@ -158,4 +153,3 @@ pub fn build_minimap_texts(
 
     texts
 }
-
