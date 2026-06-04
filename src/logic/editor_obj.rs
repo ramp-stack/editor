@@ -1,5 +1,5 @@
 use flowmango::{Canvas, GameObject};
-use quartz::tint_overlay;
+use quartz::{tint_overlay, Color};
 use ramp::prism;
 
 use crate::components::highlight::{
@@ -80,6 +80,8 @@ pub fn solid_rect(w: f32, h: f32, col: quartz::Color) -> quartz::Image {
     }
 }
 
+//I think this acts as the render loop's memory. It tracks what was last drawn
+//so the loop can skip redundant work.
 struct RenderState {
     last_path: String,
     last_version: u64,
@@ -96,6 +98,7 @@ struct RenderState {
     thumb_h: f32,
     mm_hovered: bool,
     sb_dragging: bool,
+    cached_color_map: Vec<Color>,
 }
 
 impl RenderState {
@@ -116,6 +119,7 @@ impl RenderState {
             thumb_h: 0.0,
             mm_hovered: false,
             sb_dragging: false,
+            cached_color_map: Vec::new(),
         }
     }
 
@@ -609,6 +613,13 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
 
         let waiting_for_parse = ready_ver != content_version;
 
+        if new_parse_ready {
+            let cache = parser.borrow();
+            if let Some(cache) = &*cache {
+                rs.get_mut().cached_color_map = minimap::build_color_map(cache, &theme);
+            }
+        }
+
         if sn.max_line_width <= 0.0 {
             let st = state_u.lock().unwrap();
             if let Some(longest) = st.lines.iter().max_by_key(|l| l.chars().count()) {
@@ -859,22 +870,21 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
 
             let mm_moved = sn.mm_first != first_mm || sn.mm_last != last_mm;
 
-            if new_parse_ready || mm_moved || sn.mm_texts_empty {
+            if new_parse_ready
+                || mm_moved
+                || sn.mm_texts_empty && !rs.get().cached_color_map.is_empty()
+            {
                 let st = state_u.lock().unwrap();
-                let cache = parser.borrow();
-                if let Some(cache) = &*cache {
-                    let built = minimap::build_minimap_texts(
-                        &st.lines[first_mm..last_mm],
-                        cache,
-                        &theme,
-                        &code_font_u,
-                    );
-                    drop(st);
-                    let mut r = rs.get_mut();
-                    r.mm_texts = built;
-                    r.mm_first = first_mm;
-                    r.mm_last = last_mm;
-                }
+                let built = minimap::build_minimap_texts(
+                    &st.lines[first_mm..last_mm],
+                    &rs.get().cached_color_map,
+                    &code_font_u,
+                );
+                drop(st);
+                let mut r = rs.get_mut();
+                r.mm_texts = built;
+                r.mm_first = first_mm;
+                r.mm_last = last_mm;
             }
 
             let mm_texts_len = rs.get().mm_texts.len();

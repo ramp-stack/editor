@@ -12,7 +12,7 @@ fn get(theme: &HashMap<String, Color>, key: &str) -> Color {
     theme.get(key).copied().unwrap_or(Color(192, 202, 245, 255))
 }
 
-fn build_color_map(cache: &ParseCache, theme: &HashMap<String, Color>) -> Vec<Color> {
+pub fn build_color_map(cache: &ParseCache, theme: &HashMap<String, Color>) -> Vec<Color> {
     let def_c = get(theme, "default");
     let src_len = cache.source.len();
     let mut map: Vec<Color> = vec![def_c; src_len + 1];
@@ -75,7 +75,7 @@ fn build_color_map(cache: &ParseCache, theme: &HashMap<String, Color>) -> Vec<Co
 }
 
 fn line_to_text(line: &str, line_byte_start: usize, color_map: &[Color], font: &Arc<Font>) -> Text {
-    if line.is_empty() {
+    if line.is_empty() || color_map.is_empty() {
         return Text::new(
             vec![Span::new(
                 " ".into(),
@@ -135,19 +135,12 @@ fn line_to_text(line: &str, line_byte_start: usize, color_map: &[Color], font: &
     Text::new(spans, None, Align::Left, None)
 }
 
-pub fn build_minimap_texts(
-    lines: &[String],
-    cache: &ParseCache,
-    theme: &HashMap<String, Color>,
-    font: &Arc<Font>,
-) -> Vec<Text> {
-    let color_map = build_color_map(cache, theme);
-
+pub fn build_minimap_texts(lines: &[String], colors: &[Color], font: &Arc<Font>) -> Vec<Text> {
     let mut texts = Vec::with_capacity(lines.len());
     let mut byte_off = 0usize;
 
     for line in lines {
-        texts.push(line_to_text(line, byte_off, &color_map, font));
+        texts.push(line_to_text(line, byte_off, colors, font));
         byte_off += line.len() + 1;
     }
 
