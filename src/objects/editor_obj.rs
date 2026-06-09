@@ -131,6 +131,10 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
         st.lines.join("\n")
     };
     let init_cache = ParseCache::build(init_source);
+    let init_color_map = init_cache
+        .as_ref()
+        .map(|c| minimap::build_color_map(c, &theme))
+        .unwrap_or_default();
 
     let (init_text, init_gutter) = {
         let st = ed.state.lock().unwrap();
@@ -147,7 +151,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &init_cache,
+                &init_color_map,
                 0,
             ),
             build_gutter_slice(0, end.max(1), 0, &ed.gutter_font, &cfg, &theme),
@@ -163,7 +167,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &init_cache,
+                &init_color_map,
                 0,
             );
             *ed.max_line_width.get_mut() = t.size().0;

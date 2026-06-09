@@ -190,155 +190,55 @@ pub fn build_colored_text(
     cfg: &Settings,
     theme: &HashMap<String, Color>,
     _lang: &Lang,
-    parse_cache: &Option<ParseCache>,
-    slice_start_line: usize,
+    parse_cache: &[Color],
+    slice_start_byte: usize,
 ) -> Text {
-    let Some(cache) = parse_cache else {
+    if parse_cache.is_empty() {
         return build_plain_text(lines, font, cfg, theme);
-    };
+    } else {
+        let mut spans: Vec<Span> = Vec::new();
+        let mut global_byte = slice_start_byte;
+        let last_line = lines.len().saturating_sub(1);
+        for (li, line) in lines.iter().enumerate() {
+            let mut run_start = 0usize;
+            let mut run_color = parse_cache[global_byte.min(parse_cache.len() - 1)];
+            let mut line_byte = 0usize;
 
-    let slice_start_byte = cache.line_start_byte(slice_start_line);
-    let slice_end_line = slice_start_line + lines.len();
-    let slice_end_byte = cache
-        .line_start_byte(slice_end_line)
-        .min(cache.source.len());
-
-    if slice_end_byte <= slice_start_byte {
-        return build_plain_text(lines, font, cfg, theme);
-    }
-
-    let expected_len: usize = lines
-        .iter()
-        .map(|l| l.len() + 1)
-        .sum::<usize>()
-        .saturating_sub(1);
-    let cache_slice_len = slice_end_byte.saturating_sub(slice_start_byte);
-    if cache_slice_len > cache.source.len() {
-        return build_plain_text(lines, font, cfg, theme);
-    }
-
-    let default_col = theme.get("default").copied().unwrap_or(FALLBACK);
-
-    let mut spans: Vec<Span> = Vec::new();
-    let mut prev_end: usize = slice_start_byte;
-
-    let emit = |spans: &mut Vec<Span>, abs_start: usize, abs_end: usize, color: Color| {
-        let s = abs_start.max(slice_start_byte);
-        let e = abs_end.min(slice_end_byte);
-        if e <= s {
-            return;
-        }
-        let text = safe_slice(&cache.source, s, e).to_string();
-        if text.is_empty() {
-            return;
-        }
-        spans.push(Span::new(
-            text,
-            cfg.font_size,
-            Some(cfg.line_height()),
-            font.clone(),
-            color,
-            0.0,
-        ));
-    };
-
-    let mut cursor = cache.tree.walk();
-
-    'outer: loop {
-        let node = cursor.node();
-        let node_start = node.start_byte();
-        let node_end = node.end_byte();
-
-        if node_end <= slice_start_byte || node_start >= slice_end_byte {
-            loop {
-                if cursor.goto_next_sibling() {
-                    break;
+            for ch in line.chars() {
+                let c = parse_cache[global_byte.min(parse_cache.len() - 1)];
+                if c != run_color {
+                    spans.push(Span::new(
+                        line[run_start..line_byte].to_string(),
+                        cfg.font_size,
+                        Some(cfg.line_height()),
+                        font.clone(),
+                        run_color,
+                        0.0,
+                    ));
+                    run_start = line_byte;
+                    run_color = c;
                 }
-                if !cursor.goto_parent() {
-                    break 'outer;
-                }
+                line_byte += ch.len_utf8();
+                global_byte += ch.len_utf8();
             }
-            continue;
-        }
 
-        if cursor.goto_first_child() {
-            continue;
-        }
-
-        if matches!(node.kind(), "#") {
-            let parent = node.parent().unwrap();
-            let par_start = parent.start_byte();
-            let par_end = parent.end_byte();
-            emit(&mut spans, prev_end, par_start, default_col);
-            emit(
-                &mut spans,
-                par_start,
-                par_end,
-                theme.get("attribute_item").copied().unwrap_or(FALLBACK),
-            );
-            prev_end = par_end;
-            cursor.goto_parent();
-        } else if matches!(node.kind(), "//" | "/*") {
-            let parent = node.parent().unwrap();
-            let par_start = parent.start_byte();
-            let par_end = parent.end_byte();
-            emit(&mut spans, prev_end, par_start, default_col);
-            emit(
-                &mut spans,
-                par_start,
-                par_end,
-                theme.get("line_comment").copied().unwrap_or(FALLBACK),
-            );
-            prev_end = par_end;
-            if node.kind() == "/*" {
-                cursor.goto_parent();
-            }
-        } else {
-            let theme_key = if node.parent().unwrap().kind() == "function_item"
-                && node.kind() == "identifier"
-                && cursor.field_name() == Some("name")
-            {
-                "function_name"
+            let tail = if li < last_line {
+                global_byte += 1; // newline byte
+                format!("{}\n", &line[run_start..])
             } else {
-                node.kind()
+                line[run_start..].to_string()
             };
-
-            emit(&mut spans, prev_end, node_start, default_col);
-            emit(
-                &mut spans,
-                node_start,
-                node_end,
-                theme.get(theme_key).copied().unwrap_or(default_col),
-            );
-            prev_end = node_end;
+            spans.push(Span::new(
+                tail,
+                cfg.font_size,
+                Some(cfg.line_height()),
+                font.clone(),
+                run_color,
+                0.0,
+            ));
         }
-
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                break 'outer;
-            }
-        }
+        Text::new(spans, None, Align::Left, None)
     }
-
-    if prev_end < slice_end_byte {
-        emit(&mut spans, prev_end, slice_end_byte, default_col);
-    }
-
-    if spans.is_empty() {
-        spans.push(Span::new(
-            " ".into(),
-            cfg.font_size,
-            Some(cfg.line_height()),
-            font.clone(),
-            default_col,
-            0.0,
-        ));
-    }
-
-    Text::new(spans, None, Align::Left, None)
 }
 
 fn build_plain_text(
@@ -402,4 +302,3 @@ pub fn build_gutter_slice(
     }
     Text::new(spans, None, Align::Right, None)
 }
-

@@ -233,6 +233,10 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
     };
     let init_source = ed.state.lock().unwrap().lines.join("\n");
     let init_cache = ParseCache::build(init_source);
+    let init_color_map = init_cache
+        .as_ref()
+        .map(|c| minimap::build_color_map(c, &theme))
+        .unwrap_or_default();
 
     let (init_text, init_gutter) = {
         let st = ed.state.lock().unwrap();
@@ -249,7 +253,7 @@ pub fn setup(cv: &mut Canvas, ed: &Editor) {
                 &cfg,
                 &theme,
                 &file_lang(&init_path),
-                &init_cache,
+                &init_color_map,
                 0,
             ),
             build_gutter_slice(0, end.max(1), 0, &ed.gutter_font, &cfg, &theme),
@@ -681,19 +685,21 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
         let scroll_vel = v_scroll_u.get().velocity.abs();
         let fast_scrolling = scroll_vel > 8.0 * lh;
         if (new_parse_ready || (slice_moved && !fast_scrolling)) && last_visible > slice_start {
-            let cache = parser.borrow();
             let st = state_u.lock().unwrap();
-            let text = build_colored_text(
-                &st.lines[slice_start..last_visible],
-                &code_font_u,
-                &cfg,
-                &theme,
-                &cur_lang,
-                &cache,
-                slice_start,
-            );
+            let slice_start_byte: usize = st.lines[..slice_start].iter().map(|l| l.len() + 1).sum();
+            let text = {
+                let rs_ref = rs.get();
+                build_colored_text(
+                    &st.lines[slice_start..last_visible],
+                    &code_font_u,
+                    &cfg,
+                    &theme,
+                    &cur_lang,
+                    &rs_ref.cached_color_map,
+                    slice_start_byte,
+                )
+            };
             drop(st);
-            drop(cache);
             if let Some(o) = cv.get_game_object_mut(&names_u.code_text) {
                 o.set_drawable(Box::new(text));
             }
