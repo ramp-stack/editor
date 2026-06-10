@@ -194,7 +194,7 @@ pub fn build_colored_text(
     slice_start_byte: usize,
 ) -> Text {
     if parse_cache.is_empty() {
-        return build_plain_text(lines, font, cfg, theme);
+        build_plain_text(lines, font, cfg, theme)
     } else {
         let mut spans: Vec<Span> = Vec::new();
         let mut global_byte = slice_start_byte;

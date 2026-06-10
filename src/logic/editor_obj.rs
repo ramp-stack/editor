@@ -8,7 +8,6 @@ use crate::components::highlight::{
 use crate::components::image_view;
 use crate::components::language::{file_lang, FileMode};
 use crate::components::minimap::{self, MINIMAP_LH, MINIMAP_PAD_X, MINIMAP_W};
-use crate::components::scroll::ScrollAxis;
 use crate::components::selection;
 use crate::constants::RIGHT_PAD;
 use crate::editor::Editor;
@@ -486,7 +485,6 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
     let parser = Arc::new(AsyncParser::new());
 
     cv.on_update(move |cv| {
-        let frame_start = std::time::Instant::now();
         let cfg = *cfg_u.get();
         let theme = theme_u.get().clone();
         let lh = cfg.line_height();
@@ -959,6 +957,5 @@ pub fn register(cv: &mut Canvas, ed: &Editor) {
                 o.visible = true;
             }
         }
-        println!("frame: {:?}", frame_start.elapsed());
     });
 }
